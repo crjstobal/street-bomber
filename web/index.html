@@ -44,7 +44,8 @@
   .sname{width:46px;color:var(--dim)}
   .sbar{flex:1;height:7px;border-radius:4px;background:rgba(255,255,255,.07);overflow:hidden}
   .sbar i{display:block;height:100%;width:0;border-radius:4px;transition:width .4s ease}
-  .sval{width:30px;text-align:right;font-size:11px}
+  .sval{width:58px;text-align:right;font-size:11px;white-space:nowrap}
+  .sval small{color:var(--dim)}
 
   #stock{display:flex;gap:5px;align-items:center}
   .bomb-pip{width:16px;height:16px;border-radius:50%;border:2px solid rgba(255,255,255,.22);
@@ -150,6 +151,29 @@
   #thinking{position:absolute;z-index:3;display:none;text-align:center;font-size:13px}
   #thinking.on{display:block}
 
+  #res-quip{font-size:12px;margin-top:8px;color:var(--hot);font-style:italic}
+  #res-plant[disabled]{opacity:.4}
+
+  /* ---------- album ---------- */
+  #album{position:absolute;inset:0;z-index:850;background:rgba(5,7,10,.72);display:none;
+         place-items:center;padding:16px}
+  #album.on{display:grid}
+  #album .card{width:min(420px,100%);max-height:86vh;overflow:auto;padding:16px}
+  #album h2{margin:0 0 2px;font-size:15px;letter-spacing:.12em}
+  #album .sub{font-size:11px;color:var(--dim);margin-bottom:12px}
+  .agrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .aitem{background:rgba(255,255,255,.04);border:1px solid var(--stroke);border-radius:12px;
+         overflow:hidden;text-align:center;font-size:11px}
+  .aitem .pic{aspect-ratio:1;display:grid;place-items:center;font-size:30px;background:#151a24;
+              background-size:cover;background-position:center}
+  .aitem.locked .pic{filter:grayscale(1) brightness(.4)}
+  .aitem .cap{padding:6px 4px}
+  .aitem .cap b{display:block;font-size:12px}
+  .aitem .cap span{color:var(--dim);font-size:10px}
+  .astats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0 4px;text-align:center}
+  .astats div{background:rgba(255,255,255,.04);border-radius:10px;padding:8px 4px;font-size:10px;color:var(--dim)}
+  .astats b{display:block;font-size:17px;color:var(--txt)}
+
   /* ---------- loader ---------- */
   #load{position:absolute;inset:0;z-index:900;background:#0b0d12;display:grid;place-items:center;
         text-align:center;padding:24px;transition:opacity .4s}
@@ -193,8 +217,8 @@
     <div class="hint" style="margin-top:4px"></div>
     <div class="fld"><label>Fuse <b><span id="v-fuse">20</span>s</b></label>
       <input type="range" id="r-fuse" min="5" max="120" step="5" value="20"></div>
-    <div class="fld"><label>Decay <b><span id="v-decay">180</span>s</b></label>
-      <input type="range" id="r-decay" min="30" max="900" step="30" value="180"></div>
+    <div class="fld"><label>Streets fade after <b><span id="v-decay">72</span>h</b></label>
+      <input type="range" id="r-decay" min="1" max="168" step="1" value="72"></div>
     <div class="fld"><label>Bot rivals <b><span id="v-bots">2</span></b></label>
       <input type="range" id="r-bots" min="0" max="4" step="1" value="2"></div>
     <div class="fld"><label>Movement</label>
@@ -214,6 +238,7 @@
 
 <div class="hud" id="bottom">
   <button class="btn ghost" id="mute">🔊</button>
+  <button class="btn ghost" id="album-btn" title="Your street album">📒</button>
   <button class="btn primary" id="plant">📷 PLANT BOMB</button>
   <button class="btn ghost" id="defuse" style="display:none"><i class="fill"></i><span>DEFUSE</span></button>
 </div>
@@ -236,6 +261,7 @@
       <div class="card">
         <div class="kind"><div class="big" id="res-ico"></div>
           <div><h3 id="res-name"></h3><p id="res-desc"></p></div></div>
+        <div id="res-quip"></div>
         <div class="seen" id="res-seen"></div>
         <div class="bars" id="res-bars"></div>
         <div class="row">
@@ -249,6 +275,18 @@
     <button id="snap" aria-label="Take photo"></button>
     <label class="btn ghost" id="cam-file-lbl">🖼️ Use a photo file
       <input type="file" id="cam-file" accept="image/*" style="display:none"></label>
+  </div>
+</div>
+
+<div id="album">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div><h2>STREET ALBUM</h2><div class="sub">Everything you have turned into a bomb. Photos stay on this phone.</div></div>
+      <button class="btn ghost" id="album-close">✕</button>
+    </div>
+    <div class="agrid" id="album-grid"></div>
+    <div class="astats" id="album-stats"></div>
+    <button class="btn ghost" id="album-reset" style="width:100%;margin-top:10px;font-size:11px">Reset territory in this area</button>
   </div>
 </div>
 
@@ -272,7 +310,7 @@ import { loadVision, visionReady, classify } from './vision.js';
 const CFG = {
   radius: 500,        // metres of street network loaded around the start point
   fuseMs: 20000,
-  decayMs: 180000,
+  decayMs: 72 * 3600e3,  // owned streets fade back to neutral after three days
   maxTurn: 62,        // degrees: sharpest turn the blast can follow
   plantDist: 50,      // metres to a crossing to be able to plant
   defuseDist: 45,
@@ -285,6 +323,8 @@ const CFG = {
   fortMs: 300000,     // bench bombs: how long claimed streets stay locked
   rootsEvery: 5000,   // tree bombs: growth interval
   rootsSteps: 6,
+  spentMs: 6 * 3600e3,   // same object kind on the same corner is spent for 6 h
+  reuseRadius: 350,      // metres: reuse the saved area (and its streets) when this close
 };
 
 const TEAMS = {
@@ -304,6 +344,21 @@ const BOMBS = {
   bench:        { ico:'🛡️', name:'FORT',      obj:'bench',         range:2, desc:'Streets it takes cannot be stolen for 5 minutes.' },
   none:         { ico:'🧨', name:'FIRECRACKER', obj:null,          range:1, desc:'Nothing usable in the shot. Get closer to a real object for a better bomb.' },
 };
+const QUIPS = {
+  lamp: ['Electricians hate this one trick.', 'It was just standing there, glowing.', 'Lights out for the whole street.'],
+  trafficlight: ['Red means go. For you, anyway.', 'It has been waiting for this its whole life.', 'Every direction is green now.'],
+  tree: ['Photosynthesis, but make it explosive.', 'Roots run deeper than rivals.', 'Hug it first. Then weaponise it.'],
+  bin: ['One person\'s trash is your ammo.', 'Recycling has never been this loud.', 'Reduce, reuse, detonate.'],
+  fountain: ['Hydration is a weapon.', 'Make a wish. Then flood the block.', 'Rival paint is not waterproof.'],
+  bench: ['Sit down. Hold the line.', 'Nobody moves this bench. Nobody takes this street.', 'Comfort is a defensive position.'],
+  _person: ['That is a human. Humans are not ammunition.', 'Nice face. Not a bomb, though.'],
+  _car: ['Nice car. Not a bomb.', 'We do not touch parked cars here.'],
+  _wall: ['It is a wall. Walls win every staring contest.', 'A wall. Solid choice, zero damage.'],
+  _building: ['That is a whole building. Pick something smaller.', 'Architecture appreciated. Ammo not found.'],
+  _ground: ['That is the floor. Aim higher.', 'The pavement thanks you for noticing it.'],
+};
+const pick = a => a[Math.floor(Math.random() * a.length)];
+
 const BOT_POOL = ['lamp','tree','bin','bench','trafficlight','none','none','fountain'];
 
 /* ============================================================
@@ -318,6 +373,11 @@ let me = { lat:0, lon:0, marker:null, bombs:CFG.maxBombs, lastRegen:0 };
 let bombs = new Map();      // id -> {id,nodeKey,team,at,fuse,kind,marker}
 let bombId = 0;
 let bots = [];
+let blocks = [];            // closed city blocks: {sids, poly, owner, layer}
+let blockLayer;
+let area = null;            // {lat, lon} centre of the loaded area
+let save = { album:{}, spent:{}, stats:{ bombs:0, blocks:0, streets:0 } };
+let silent = false;         // no capture fanfare while restoring a saved game
 let moveMode = 'dev';
 let geoWatch = null;
 let muted = false;
@@ -394,7 +454,7 @@ async function fetchStreets(lat, lon) {
    GRAPH: crossings = nodes, street stretches = edges
    ============================================================ */
 function buildGraph(elements) {
-  nodes = new Map(); segs = new Map(); segId = 0;
+  nodes = new Map(); segs = new Map(); segId = 0; blocks = [];
 
   // 1. count how often each coordinate appears -> crossings are shared
   const count = new Map();
@@ -550,6 +610,142 @@ function computeArea(startKey, depth) {
 }
 
 /* ============================================================
+   CITY BLOCKS: the faces of the street graph. Own every street
+   around one and the whole block is yours.
+   ============================================================ */
+function buildBlocks() {
+  blockLayer.clearLayers();
+  blocks = [];
+  const out = new Map();
+  const push = (k, h) => { if (!out.has(k)) out.set(k, []); out.get(k).push(h); };
+  for (const s of segs.values()) {
+    push(s.a, { sid:s.id, from:s.a, to:s.b, ang:bearingLeaving(s, s.a) });
+    push(s.b, { sid:s.id, from:s.b, to:s.a, ang:bearingLeaving(s, s.b) });
+  }
+  for (const list of out.values()) list.sort((x, y) => x.ang - y.ang);
+
+  const used = new Set();
+  const faces = [];
+  for (const list of out.values()) for (const start of list) {
+    const id0 = start.sid + '>' + start.to;
+    if (used.has(id0)) continue;
+    const walk = [];
+    let h = start, closed = false;
+    for (let i = 0; i < 40; i++) {
+      used.add(h.sid + '>' + h.to);
+      walk.push(h);
+      const at = out.get(h.to);
+      const back = at.findIndex(x => x.sid === h.sid && x.to === h.from);
+      h = at[(back - 1 + at.length) % at.length];
+      if (h === start) { closed = true; break; }
+    }
+    if (closed && walk.length >= 3) faces.push(walk);
+  }
+
+  const kx = Math.cos(rad(area.lat)) * rad(1) * R, ky = rad(1) * R;
+  const shapes = faces.map(walk => {
+    const poly = [];
+    const count = new Map();
+    for (const h of walk) {
+      const s = segs.get(h.sid);
+      const pts = s.a === h.from ? s.pts : [...s.pts].reverse();
+      poly.push(...pts.slice(0, -1));
+      count.set(h.sid, (count.get(h.sid) || 0) + 1);
+    }
+    // shoelace in local metres; the outer face of each component has the opposite sign
+    let a2 = 0;
+    for (let i = 0; i < poly.length; i++) {
+      const [y1, x1] = poly[i], [y2, x2] = poly[(i + 1) % poly.length];
+      a2 += x1 * kx * y2 * ky - x2 * kx * y1 * ky;
+    }
+    const sids = [...count].filter(([, n]) => n === 1).map(([sid]) => sid); // skip dead ends inside
+    return { poly, sids, areaM2: a2 / 2 };
+  });
+  const sum = sgn => shapes.filter(f => Math.sign(f.areaM2) === sgn).reduce((a, f) => a + Math.abs(f.areaM2), 0);
+  const sign = sum(1) >= sum(-1) ? 1 : -1;   // inner faces dominate the total area
+  for (const f of shapes) {
+    const m2 = f.areaM2 * sign;
+    if (m2 < 120 || m2 > 60000 || !f.sids.length) continue;
+    const b = { sids:f.sids, poly:f.poly, owner:null, m2 };
+    b.layer = L.polygon(f.poly, { stroke:false, fillOpacity:0, interactive:false }).addTo(blockLayer);
+    blocks.push(b);
+  }
+}
+
+function refreshBlocks() {
+  for (const b of blocks) {
+    const first = segs.get(b.sids[0])?.owner || null;
+    const owner = first && b.sids.every(sid => segs.get(sid)?.owner === first) ? first : null;
+    if (owner === b.owner) continue;
+    const was = b.owner;
+    b.owner = owner;
+    b.layer.setStyle(owner ? { fillColor:TEAMS[owner].color, fillOpacity:.42 } : { fillOpacity:0 });
+    if (silent) continue;
+    if (owner === 'red') {
+      save.stats.blocks++;
+      me.bombs = Math.min(CFG.maxBombs, me.bombs + 1); refreshStock();
+      log(`🏁 <b>BLOCK CAPTURED</b> · ${Math.round(b.m2)} m² of city · +1 bomb`, 'var(--hot)');
+      sfx('capture');
+      pulseBlock(b);
+    } else if (was === 'red') {
+      log(`💔 You lost a block to <b>${owner ? TEAMS[owner].name : 'decay'}</b>`, 'var(--dim)');
+    }
+  }
+}
+
+function pulseBlock(b) {
+  let k = 0;
+  const iv = setInterval(() => {
+    k++;
+    b.layer.setStyle({ fillOpacity: k % 2 ? .8 : .42 });
+    if (k >= 6) { clearInterval(iv); b.layer.setStyle({ fillOpacity:.42 }); }
+  }, 160);
+}
+
+/* ============================================================
+   SAVE GAME (this device only)
+   ============================================================ */
+const SAVE_KEY = 'streetbomber:v1';
+const segKey = s => [s.a, s.b].sort().join('|') + '|' + Math.round(s.len);
+
+function readSave() {
+  try { return JSON.parse(localStorage.getItem(SAVE_KEY)) || null; } catch { return null; }
+}
+function writeSave() {
+  if (!area) return;
+  const own = {};
+  for (const s of segs.values())
+    if (s.owner) own[segKey(s)] = [s.owner, s.ownedAt, s.fortUntil, s.fortTeam];
+  save.area = area; save.own = own; save.bombs = me.bombs;
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch {}
+}
+function restoreTerritory() {
+  if (!save.own || !save.area || dist([save.area.lat, save.area.lon], [area.lat, area.lon]) > 30) return;
+  silent = true;
+  for (const s of segs.values()) {
+    const o = save.own[segKey(s)];
+    if (!o) continue;
+    [s.owner, s.ownedAt, s.fortUntil, s.fortTeam] = o;
+    paintSeg(s);
+  }
+  refreshScore();
+  silent = false;
+  if (typeof save.bombs === 'number') me.bombs = save.bombs;
+}
+
+// Street networks are cached per area so the second visit loads instantly.
+const streetsKey = (lat, lon) => `streetbomber:streets:${lat.toFixed(4)},${lon.toFixed(4)}`;
+function cachedStreets(lat, lon) {
+  try { return JSON.parse(localStorage.getItem(streetsKey(lat, lon))); } catch { return null; }
+}
+function cacheStreets(lat, lon, els) {
+  const slim = els.filter(e => e.type === 'way' && e.geometry).map(e => ({
+    type:'way', tags: e.tags?.name ? { name:e.tags.name } : undefined,
+    geometry: e.geometry.map(g => ({ lat:+g.lat.toFixed(7), lon:+g.lon.toFixed(7) })) }));
+  try { localStorage.setItem(streetsKey(lat, lon), JSON.stringify(slim)); } catch {}
+}
+
+/* ============================================================
    RENDER
    ============================================================ */
 function drawGraph() {
@@ -571,12 +767,14 @@ function paintSeg(s) {
 const isFort = s => s.fortUntil > Date.now();
 
 function refreshScore() {
-  const c = { red:0, blue:0, lime:0 };
+  refreshBlocks();
+  const c = { red:0, blue:0, lime:0 }, bk = { red:0, blue:0, lime:0 };
   for (const s of segs.values()) if (s.owner) c[s.owner]++;
+  for (const b of blocks) if (b.owner) bk[b.owner]++;
   const total = Math.max(segs.size, 1);
   for (const t of Object.keys(TEAMS)) {
     document.getElementById('bar-'+t).style.width = (c[t]/total*100).toFixed(1) + '%';
-    document.getElementById('val-'+t).textContent = c[t];
+    document.getElementById('val-'+t).innerHTML = `${c[t]} <small>· ${bk[t]}▣</small>`;
   }
 }
 
@@ -841,6 +1039,14 @@ function commitPlant(nodeKey, kind) {
   if (me.bombs <= 0) return;
   me.bombs--; refreshStock();
   plantBomb(nodeKey, 'red', CFG.fuseMs, kind);
+  save.stats.bombs++;
+  if (kind !== 'none') {
+    const a = save.album[kind] || (save.album[kind] = { n:0, first:Date.now() });
+    a.n++; a.last = Date.now();
+    if (lastThumb) a.thumb = lastThumb;
+    (save.spent[nodeKey] || (save.spent[nodeKey] = {}))[kind] = Date.now();
+  }
+  writeSave();
   const k = BOMBS[kind];
   log(`${k.ico} <b>${k.name}</b> planted · fuse ${Math.round(CFG.fuseMs/1000)}s`, 'var(--red)');
 }
@@ -955,6 +1161,10 @@ async function analyse(blob) {
   $('thinking').classList.remove('on');
 
   camKind = r.cls || 'none';
+  const spentAt = r.cls && save.spent[camNode]?.[r.cls];
+  const spent = spentAt && Date.now() - spentAt < CFG.spentMs;
+  if (spent) camKind = 'none';
+  lastThumb = await thumbnail(blob);
   const k = BOMBS[camKind];
   $('res-ico').textContent = k.ico;
   $('res-name').textContent = k.name + ' BOMB';
@@ -970,7 +1180,38 @@ async function analyse(blob) {
   $('res-bars').innerHTML = top.map(([c, s]) =>
     `<div class="bar"><span class="lab">${BOMBS[c].ico} ${BOMBS[c].obj}</span>` +
     `<i style="width:${Math.max(4, s/max*120)}px;opacity:${c===r.cls?1:.35}"></i></div>`).join('');
+  if (spent) $('res-seen').innerHTML =
+    `This corner's <b>${BOMBS[r.cls].obj}</b> is spent for now. Find something else here, or try another corner. (${r.ms} ms on this device)`;
+  $('res-quip').textContent = spent ? 'Same tree, same corner? Nice try.' : pick(QUIPS[r.cls || r.seen] || QUIPS._ground);
   $('result').classList.add('on');
+}
+
+let lastThumb = null;
+async function thumbnail(blob) {
+  try {
+    const bmp = await createImageBitmap(blob);
+    const S = 160, c = document.createElement('canvas');
+    c.width = c.height = S;
+    const side = Math.min(bmp.width, bmp.height);
+    c.getContext('2d').drawImage(bmp, (bmp.width-side)/2, (bmp.height-side)/2, side, side, 0, 0, S, S);
+    return c.toDataURL('image/jpeg', 0.6);
+  } catch { return null; }
+}
+
+function openAlbum() {
+  const kinds = Object.keys(BOMBS).filter(k => k !== 'none');
+  $('album-grid').innerHTML = kinds.map(k => {
+    const a = save.album[k], b = BOMBS[k];
+    return `<div class="aitem ${a ? '' : 'locked'}">
+      <div class="pic" style="${a?.thumb ? `background-image:url(${a.thumb})` : ''}">${a?.thumb ? '' : b.ico}</div>
+      <div class="cap"><b>${a ? '×' + a.n : '?'}</b><span>${b.ico} ${b.obj}</span></div></div>`;
+  }).join('');
+  const found = kinds.filter(k => save.album[k]).length;
+  $('album-stats').innerHTML =
+    `<div><b>${found}/${kinds.length}</b>kinds found</div>` +
+    `<div><b>${save.stats.bombs}</b>bombs planted</div>` +
+    `<div><b>${save.stats.blocks}</b>blocks captured</div>`;
+  $('album').classList.add('on');
 }
 
 function startVision() {
@@ -1069,6 +1310,14 @@ function sfx(kind) {
       f.frequency.setValueAtTime(1400, t); f.frequency.exponentialRampToValueAtTime(90, t+.45);
       const g = c.createGain(); g.gain.setValueAtTime(.5, t); g.gain.exponentialRampToValueAtTime(.001, t+.5);
       src.connect(f).connect(g).connect(c.destination); src.start(t);
+    } else if (kind === 'capture') {
+      [523, 659, 784, 1047].forEach((f, i) => {
+        const o = c.createOscillator(), g = c.createGain();
+        o.type = 'triangle'; o.frequency.value = f;
+        g.gain.setValueAtTime(.0001, t + i*.09); g.gain.exponentialRampToValueAtTime(.15, t + i*.09 + .02);
+        g.gain.exponentialRampToValueAtTime(.001, t + i*.09 + .3);
+        o.connect(g).connect(c.destination); o.start(t + i*.09); o.stop(t + i*.09 + .32);
+      });
     } else {
       const o = c.createOscillator(), g = c.createGain();
       o.type = 'square';
@@ -1096,34 +1345,49 @@ function getPosition() {
   });
 }
 
-async function loadArea(lat, lon, demo) {
+async function loadArea(lat, lon, demo, fresh) {
   $('load').classList.remove('done');
   $('load-retry').style.display = 'none';
   try {
-    let els;
-    if (demo) {
+    let els, centre;
+    const me0 = demo ? [DEMO.lat, DEMO.lon] : [lat, lon];
+    // keep playing the saved area while we are still inside it
+    if (!fresh && save.area && dist(me0, [save.area.lat, save.area.lon]) < CFG.reuseRadius)
+      centre = [save.area.lat, save.area.lon];
+    else centre = me0;
+    els = cachedStreets(...centre);
+    if (els) setLoadMsg('streets from this phone\'s cache…');
+    else if (demo) {
       setLoadMsg('loading the demo city…');
       els = (await (await fetch(DEMO.file)).json()).elements;
-      [lat, lon] = [DEMO.lat, DEMO.lon];
     } else {
-      setLoadMsg('downloading streets…');
-      try { els = await fetchStreets(lat, lon); }
+      setLoadMsg('downloading streets from OpenStreetMap…');
+      try { els = await fetchStreets(...centre); cacheStreets(...centre, els); }
       catch (e) {
         log(`Street server busy (${e.message}) · loaded the demo city instead`, 'var(--hot)');
         return loadArea(0, 0, true);
       }
     }
+    if (save.area && dist(centre, [save.area.lat, save.area.lon]) > 30) {
+      save.own = {}; save.spent = {};
+      log('🗺️ New area: your territory starts from zero here (the album keeps everything).', 'var(--blue)');
+    }
+    area = { lat:centre[0], lon:centre[1] };
     setLoadMsg('building the crossing graph…');
     buildGraph(els);
     drawGraph();
-    setMe(lat, lon, false);
-    map.setView([lat, lon], 17);
+    buildBlocks();
     bombs.forEach(b => b.marker && fxLayer.removeLayer(b.marker));
     bombs.clear();
+    me.bombs = CFG.maxBombs;
+    restoreTerritory();
+    refreshStock();
+    setMe(...me0, false);
+    map.setView(me0, 17);
     spawnBots(CFG.botCount);
-    me.bombs = CFG.maxBombs; refreshStock();
+    writeSave();
     $('load').classList.add('done');
-    log(`📍 Area loaded: <b>${nodes.size} crossings</b>, <b>${segs.size} stretches</b>`, 'var(--lime)');
+    log(`📍 Area loaded: <b>${nodes.size} crossings</b>, <b>${blocks.length} blocks</b> to take`, 'var(--lime)');
     log('Walk to a corner, photograph what is there, and that becomes your bomb.', 'var(--dim)');
   } catch (e) {
     setLoadMsg('Error: ' + e.message);
@@ -1139,6 +1403,8 @@ function renderArsenal() {
 
 async function init() {
   renderArsenal();
+  const saved = readSave();
+  if (saved) save = { ...save, ...saved };
   map = L.map('map', { preferCanvas:true, zoomControl:false, attributionControl:true })
         .setView([40.4168,-3.7038], 17);
   L.control.zoom({ position:'bottomright' }).addTo(map);
@@ -1147,6 +1413,7 @@ async function init() {
     maxZoom:19, className:'dark-tiles',
     attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
   }).addTo(map);
+  blockLayer = L.layerGroup().addTo(map);
   graphLayer = L.layerGroup().addTo(map);
   fxLayer = L.layerGroup().addTo(map);
 
@@ -1170,13 +1437,32 @@ async function init() {
   }, 500);
   setInterval(() => { if (bots.length) tickBots(); }, CFG.botTick);
   setInterval(updateDefuseButton, 400);
+  setInterval(writeSave, 5000);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) writeSave(); });
 }
 
 /* ---------- UI ---------- */
 $('plant').onclick = () => { ac(); tryPlant(); };
 $('load-retry').onclick = () => loadArea(me.lat, me.lon, !me.lat);
 $('reload').onclick = () => {
-  const c = map.getCenter(); loadArea(c.lat, c.lng);
+  const c = map.getCenter(); loadArea(c.lat, c.lng, false, true);
+};
+$('album-btn').onclick = openAlbum;
+$('album-close').onclick = () => $('album').classList.remove('on');
+let resetArmed = 0;
+$('album-reset').onclick = () => {
+  if (Date.now() - resetArmed > 3000) {
+    resetArmed = Date.now();
+    $('album-reset').textContent = 'Tap again to wipe your streets here';
+    setTimeout(() => $('album-reset').textContent = 'Reset territory in this area', 3000);
+    return;
+  }
+  for (const s of segs.values()) { s.owner = null; s.fortUntil = 0; s.fortTeam = null; paintSeg(s); }
+  save.own = {}; save.spent = {};
+  silent = true; refreshScore(); silent = false;
+  writeSave();
+  $('album').classList.remove('on');
+  log('🧹 Territory reset in this area', 'var(--dim)');
 };
 $('mute').onclick = e => {
   muted = !muted; e.target.textContent = muted ? '🔇' : '🔊';
@@ -1200,7 +1486,7 @@ const bind = (id, key, apply) => {
   };
 };
 bind('r-fuse','fuse', v => CFG.fuseMs = v*1000);
-bind('r-decay','decay', v => CFG.decayMs = v*1000);
+bind('r-decay','decay', v => CFG.decayMs = v*3600e3);
 bind('r-bots','bots', v => { CFG.botCount = v; spawnBots(v); });
 
 document.querySelectorAll('#movemode button').forEach(b => b.onclick = () => {
@@ -1236,6 +1522,8 @@ window.addEventListener('keydown', e => {
 if (location.hash === '#debug') window.SB = {
   nodes: () => nodes, segs: () => segs, bombs: () => bombs, me: () => me, setMe,
   detonateAll: () => [...bombs.values()].forEach(b => detonate(b, 0)),
+  blocks: () => blocks, claim: (sid, team) => { const s = segs.get(sid); s.owner = team; s.ownedAt = Date.now(); paintSeg(s); refreshScore(); },
+  save: () => save,
 };
 
 refreshStock();

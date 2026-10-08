@@ -23,7 +23,13 @@ Built for the DEV Hacktoberfest 2026 Open-Source AI Challenge, Week 1: *Touch Gr
 | Bench | 🛡️ Fort | Streets it takes cannot be stolen for 5 minutes |
 | Anything else | 🧨 Firecracker | Just the corner you stand on |
 
-Streets you own fade back to neutral unless you keep bombing. Rival bots do the same.
+- **Close the block.** Own every street around a city block and the whole block fills
+  with your colour (+1 bomb). Blocks are computed from the street graph itself.
+- **One object, one corner.** The same kind of object on the same corner is spent for
+  6 hours, so the game keeps pushing you to explore.
+- **Street album.** Every kind of object you have weaponised, with your own photo.
+- Progress is saved on the phone. Owned streets fade back to neutral after three days
+  unless you come back. Two simple rival bots (random walkers, not AI) keep the map moving.
 
 ## The open AI part
 
