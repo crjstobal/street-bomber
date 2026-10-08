@@ -217,8 +217,8 @@
     <div class="hint" style="margin-top:4px"></div>
     <div class="fld"><label>Fuse <b><span id="v-fuse">20</span>s</b></label>
       <input type="range" id="r-fuse" min="5" max="120" step="5" value="20"></div>
-    <div class="fld"><label>Streets fade after <b><span id="v-decay">72</span>h</b></label>
-      <input type="range" id="r-decay" min="1" max="168" step="1" value="72"></div>
+    <div class="fld"><label>Streets fade after <b><span id="v-decay">168</span>h</b></label>
+      <input type="range" id="r-decay" min="1" max="336" step="1" value="168"></div>
     <div class="fld"><label>Bot rivals <b><span id="v-bots">2</span></b></label>
       <input type="range" id="r-bots" min="0" max="4" step="1" value="2"></div>
     <div class="fld"><label>Movement</label>
@@ -310,13 +310,14 @@ import { loadVision, visionReady, classify } from './vision.js';
 const CFG = {
   radius: 500,        // metres of street network loaded around the start point
   fuseMs: 20000,
-  decayMs: 72 * 3600e3,  // owned streets fade back to neutral after three days
+  decayMs: 7 * 24 * 3600e3,  // owned streets fade back to neutral after a week
   maxTurn: 62,        // degrees: sharpest turn the blast can follow
   plantDist: 50,      // metres to a crossing to be able to plant
   defuseDist: 45,
   defuseHold: 2200,
   maxBombs: 3,
-  regenMs: 15000,
+  regenMs: 15000,       // demo mode: a new bomb every 15 s
+  dayMs: 24 * 3600e3,   // real GPS play: one new bomb per day
   stepMeters: 14,     // keyboard step
   botTick: 2600,
   botCount: 2,
@@ -339,7 +340,7 @@ const BOMBS = {
   lamp:         { ico:'⚡', name:'SPARK',     obj:'lamp post',     range:7, desc:'Runs down the whole street in a straight line.' },
   trafficlight: { ico:'🚦', name:'CROSSFIRE', obj:'traffic light', range:2, area:true, desc:'Turns every corner: takes the whole block.' },
   tree:         { ico:'🌳', name:'ROOTS',     obj:'tree',          range:2, desc:'Keeps growing into the streets next to it.' },
-  bin:          { ico:'♻️', name:'SCRAP',     obj:'bin',           range:2, desc:'Recycled: refills your bomb stock.' },
+  bin:          { ico:'♻️', name:'SCRAP',     obj:'bin',           range:2, desc:'Recycled: gives you one bomb back right away.' },
   fountain:     { ico:'💧', name:'FLOOD',     obj:'fountain',      range:4, desc:'Washes rival streets back to neutral and drowns their bombs.' },
   bench:        { ico:'🛡️', name:'FORT',      obj:'bench',         range:2, desc:'Streets it takes cannot be stolen for 5 minutes.' },
   none:         { ico:'🧨', name:'FIRECRACKER', obj:null,          range:1, desc:'Nothing usable in the shot. Get closer to a real object for a better bomb.' },
@@ -716,7 +717,8 @@ function writeSave() {
   const own = {};
   for (const s of segs.values())
     if (s.owner) own[segKey(s)] = [s.owner, s.ownedAt, s.fortUntil, s.fortTeam];
-  save.area = area; save.own = own; save.bombs = me.bombs;
+  save.area = area; save.own = own;
+  if (realPlay()) save.real = { bombs:me.bombs, lastRegen:me.lastRegen };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch {}
 }
 function restoreTerritory() {
@@ -730,7 +732,23 @@ function restoreTerritory() {
   }
   refreshScore();
   silent = false;
-  if (typeof save.bombs === 'number') me.bombs = save.bombs;
+}
+
+// Real play has a daily economy that survives reloads and area changes;
+// demo mode keeps a fast, throwaway stock so anyone can try it at a desk.
+const realPlay = () => moveMode === 'gps';
+function loadStock() {
+  if (realPlay()) {
+    save.real = save.real || { bombs:CFG.maxBombs, lastRegen:Date.now() };   // starter pack
+    me.bombs = save.real.bombs; me.lastRegen = save.real.lastRegen;
+  } else { me.bombs = CFG.maxBombs; me.lastRegen = Date.now(); }
+  refreshStock();
+}
+function tickRegen() {
+  const every = realPlay() ? CFG.dayMs : CFG.regenMs, now = Date.now();
+  if (me.bombs >= CFG.maxBombs) me.lastRegen = now;
+  while (me.bombs < CFG.maxBombs && now - me.lastRegen >= every) { me.bombs++; me.lastRegen += every; }
+  refreshStock();
 }
 
 // Street networks are cached per area so the second visit loads instantly.
@@ -785,6 +803,14 @@ function refreshStock() {
     const d = document.createElement('div');
     d.className = 'bomb-pip' + (i < me.bombs ? ' on' : '');
     el.appendChild(d);
+  }
+  if (realPlay() && me.bombs < CFG.maxBombs) {
+    const left = Math.max(0, CFG.dayMs - (Date.now() - me.lastRegen));
+    const h = Math.floor(left / 3600e3), m = Math.floor(left % 3600e3 / 60e3);
+    const t = document.createElement('span');
+    t.className = 'mono'; t.style.cssText = 'font-size:10px;color:var(--dim);margin-left:4px';
+    t.textContent = `+1 in ${h}h ${String(m).padStart(2,'0')}m`;
+    el.appendChild(t);
   }
   document.getElementById('plant').disabled = me.bombs <= 0;
 }
@@ -894,8 +920,8 @@ function detonate(b, depth) {
 
   // per-kind side effects
   if (b.kind === 'bin') {
-    if (b.team === 'red') { me.bombs = CFG.maxBombs; refreshStock(); log('♻️ Scrap recycled: <b>bomb stock refilled</b>', 'var(--lime)'); }
-    else { const bot = bots.find(x => x.team === b.team); if (bot) bot.bombs = 2; }
+    if (b.team === 'red') { me.bombs = Math.min(CFG.maxBombs, me.bombs + 1); refreshStock(); log('♻️ Scrap recycled: <b>+1 bomb</b>', 'var(--lime)'); }
+    else { const bot = bots.find(x => x.team === b.team); if (bot) bot.bombs++; }
   }
   if (b.kind === 'tree') growRoots(b.team, touched);
   setTimeout(() => {
@@ -1026,7 +1052,11 @@ function nudge(dLat, dLon) {
 }
 
 function tryPlant() {
-  if (me.bombs <= 0) { log('Out of bombs · wait for them to recharge', 'var(--dim)'); return; }
+  if (me.bombs <= 0) {
+    log(realPlay() ? 'Out of bombs · a new one arrives every day. Come back tomorrow (or find a bin).'
+                   : 'Out of bombs · wait for them to recharge', 'var(--dim)');
+    return;
+  }
   const n = nearestNode(me.lat, me.lon, CFG.plantDist);
   if (!n) { log('🚫 No crossing within ' + CFG.plantDist + ' m · walk to a corner', 'var(--dim)'); return; }
   if ([...bombs.values()].some(b => b.nodeKey === n.key)) {
@@ -1252,7 +1282,7 @@ function spawnBots(n) {
     const k = keys[Math.floor(Math.random()*keys.length)];
     const nd = nodes.get(k);
     const team = teams[i % teams.length];
-    const bot = { team, nodeKey:k, bombs:2, marker:null };
+    const bot = { team, nodeKey:k, bombs: realPlay() ? 1 : 2, lastRegen:Date.now(), marker:null };
     bot.marker = L.marker([nd.lat, nd.lon], { interactive:false,
       icon: L.divIcon({ className:'', iconSize:[15,15], iconAnchor:[7,7],
         html:`<div class="bot-ico" style="background:${TEAMS[team].color};box-shadow:0 0 10px ${TEAMS[team].color}"></div>` })
@@ -1284,7 +1314,8 @@ function tickBots() {
       plantBomb(bot.nodeKey, bot.team, CFG.fuseMs * (0.7 + Math.random()*0.8),
                 BOT_POOL[Math.floor(Math.random()*BOT_POOL.length)]);
     }
-    if (bot.bombs < 2 && Math.random() < .5) bot.bombs++;
+    if (realPlay()) { if (bot.bombs < 1 && Date.now() - bot.lastRegen > CFG.dayMs) { bot.bombs++; bot.lastRegen = Date.now(); } }
+    else if (bot.bombs < 2 && Math.random() < .5) bot.bombs++;
   }
 }
 
@@ -1379,7 +1410,6 @@ async function loadArea(lat, lon, demo, fresh) {
     buildBlocks();
     bombs.forEach(b => b.marker && fxLayer.removeLayer(b.marker));
     bombs.clear();
-    me.bombs = CFG.maxBombs;
     restoreTerritory();
     refreshStock();
     setMe(...me0, false);
@@ -1422,6 +1452,7 @@ async function init() {
   setLoadMsg('finding your position…');
   const pos = await getPosition();
   if (!pos) log('No GPS · playing the demo city. Pan the map and use «Load streets around map center» to play elsewhere.', 'var(--hot)');
+  loadStock();
   await loadArea(pos?.[0], pos?.[1], !pos);
   startVision();
   // On a phone with GPS, play for real: the settings panel is hidden on small screens.
@@ -1430,11 +1461,7 @@ async function init() {
 
   setInterval(tickBombs, 250);
   setInterval(tickDecay, 1000);
-  setInterval(() => {
-    if (me.bombs < CFG.maxBombs && Date.now() - me.lastRegen > CFG.regenMs) {
-      me.bombs++; me.lastRegen = Date.now(); refreshStock();
-    }
-  }, 500);
+  setInterval(tickRegen, 1000);
   setInterval(() => { if (bots.length) tickBots(); }, CFG.botTick);
   setInterval(updateDefuseButton, 400);
   setInterval(writeSave, 5000);
@@ -1492,7 +1519,9 @@ bind('r-bots','bots', v => { CFG.botCount = v; spawnBots(v); });
 document.querySelectorAll('#movemode button').forEach(b => b.onclick = () => {
   document.querySelectorAll('#movemode button').forEach(x => x.classList.remove('on'));
   b.classList.add('on');
+  if (realPlay()) save.real = { bombs:me.bombs, lastRegen:me.lastRegen };
   moveMode = b.dataset.mode;
+  loadStock();
   $('cam-file-lbl').style.display = moveMode === 'dev' ? '' : 'none';
   if (moveMode === 'gps') {
     if (!navigator.geolocation) { log('This browser has no geolocation', 'var(--hot)'); return; }

@@ -18,7 +18,7 @@ Built for the DEV Hacktoberfest 2026 Open-Source AI Challenge, Week 1: *Touch Gr
 | Lamp post | ⚡ Spark | Runs down the whole street in a straight line |
 | Traffic light | 🚦 Crossfire | Turns every corner, takes the whole block |
 | Tree | 🌳 Roots | Keeps growing into neighbouring streets |
-| Bin | ♻️ Scrap | Refills your bomb stock |
+| Bin | ♻️ Scrap | Gives you one bomb back right away |
 | Fountain | 💧 Flood | Washes rival streets back to neutral, drowns their bombs |
 | Bench | 🛡️ Fort | Streets it takes cannot be stolen for 5 minutes |
 | Anything else | 🧨 Firecracker | Just the corner you stand on |
@@ -28,8 +28,11 @@ Built for the DEV Hacktoberfest 2026 Open-Source AI Challenge, Week 1: *Touch Gr
 - **One object, one corner.** The same kind of object on the same corner is spent for
   6 hours, so the game keeps pushing you to explore.
 - **Street album.** Every kind of object you have weaponised, with your own photo.
-- Progress is saved on the phone. Owned streets fade back to neutral after three days
-  unless you come back. Two simple rival bots (random walkers, not AI) keep the map moving.
+- **One bomb a day.** In real GPS play you get a new bomb every 24 hours (stock of up to 3,
+  starter pack of 3). Closing a block or recycling a bin earns one back. The point is to
+  make you go outside again tomorrow, not to keep you on the screen today.
+- Progress is saved on the phone. Owned streets fade back to neutral after a week
+  unless you come back. Demo mode (desk play) recharges every 15 s so anyone can try it. Two simple rival bots (random walkers, not AI) keep the map moving.
 
 ## The open AI part
 
