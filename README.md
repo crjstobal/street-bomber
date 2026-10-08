@@ -66,6 +66,12 @@ node build-embeds.mjs          # after editing tools/classes.json
 node build-demo-streets.mjs    # optional: [lat] [lon] for another demo city
 ```
 
+## Demo footage
+
+`media/street-bomber-block.gif` is recorded in demo mode (central Madrid, simulated camera)
+so no real player's streets appear. Camera photos in it come from Wikimedia Commons:
+street tree by Fons Heijnsbroek (CC0); traffic light in Darwin by Dietmar Rabich (CC BY-SA 4.0).
+
 ## License
 
 MIT. Map data © OpenStreetMap contributors (ODbL).

@@ -1552,7 +1552,8 @@ if (location.hash === '#debug') window.SB = {
   nodes: () => nodes, segs: () => segs, bombs: () => bombs, me: () => me, setMe,
   detonateAll: () => [...bombs.values()].forEach(b => detonate(b, 0)),
   blocks: () => blocks, claim: (sid, team) => { const s = segs.get(sid); s.owner = team; s.ownedAt = Date.now(); paintSeg(s); refreshScore(); },
-  save: () => save,
+  save: () => save, point: (lat, lon) => map.latLngToContainerPoint([lat, lon]),
+  view: (lat, lon, z) => map.setView([lat, lon], z ?? map.getZoom(), { animate:true }),
 };
 
 refreshStock();
