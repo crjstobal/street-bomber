@@ -1,0 +1,62 @@
+# Street Bomber
+
+Bomberman on your real streets. Walk to a corner, photograph what is there, and an
+open vision model running **on your phone** turns it into your bomb. A lamp post
+becomes a blast that runs the whole street; a tree grows roots into the next block;
+a bin recycles into more ammo.
+
+Built for the DEV Hacktoberfest 2026 Open-Source AI Challenge, Week 1: *Touch Grass*.
+
+## How it plays
+
+- The map is your neighbourhood: real streets from OpenStreetMap, crossings are where you plant.
+- You must physically be at a crossing (GPS) and take a live photo there.
+- The photo decides the bomb:
+
+| You photograph | Bomb | Effect |
+|---|---|---|
+| Lamp post | ⚡ Spark | Runs down the whole street in a straight line |
+| Traffic light | 🚦 Crossfire | Turns every corner, takes the whole block |
+| Tree | 🌳 Roots | Keeps growing into neighbouring streets |
+| Bin | ♻️ Scrap | Refills your bomb stock |
+| Fountain | 💧 Flood | Washes rival streets back to neutral, drowns their bombs |
+| Bench | 🛡️ Fort | Streets it takes cannot be stolen for 5 minutes |
+| Anything else | 🧨 Firecracker | Just the corner you stand on |
+
+Streets you own fade back to neutral unless you keep bombing. Rival bots do the same.
+
+## The open AI part
+
+- Model: [SigLIP base](https://huggingface.co/Xenova/siglip-base-patch16-224) (open weights),
+  run in the browser with [Transformers.js](https://github.com/huggingface/transformers.js) on WASM.
+- Only the **vision encoder** ships to the phone (99 MB, int8, downloaded once and cached).
+  The text side (one embedding per class prompt) is precomputed by `tools/build-embeds.mjs`
+  into `web/text_embeds.json`.
+- Classification is a cosine similarity against those prompts, plus "decoy" classes
+  (wall, building, car, person, pavement) so random shots fall back to a firecracker
+  instead of being forced into a bomb. About 1 s per photo on a laptop browser.
+- **No photo and no location ever leave the device.** There is no backend.
+
+## Run it
+
+Any static server works (camera and GPS need `https` or `localhost`):
+
+```bash
+cd web && python3 -m http.server 8000
+# open http://localhost:8000
+```
+
+Without GPS it loads a baked demo city (central Madrid, `web/demo-streets.json`).
+In **Demo** mode you walk with click or WASD and can feed the camera a photo file.
+
+## Rebuild the data
+
+```bash
+cd tools && npm i @huggingface/transformers
+node build-embeds.mjs          # after editing tools/classes.json
+node build-demo-streets.mjs    # optional: [lat] [lon] for another demo city
+```
+
+## License
+
+MIT. Map data © OpenStreetMap contributors (ODbL).

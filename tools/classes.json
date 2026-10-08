@@ -1,0 +1,13 @@
+{
+  "lamp": ["a street lamp", "a lamp post", "a street light pole"],
+  "trafficlight": ["a traffic light", "a traffic signal at a crossing"],
+  "tree": ["a tree", "a tree trunk", "a street tree on the sidewalk", "tree branches and leaves"],
+  "bin": ["a trash can", "a litter bin", "a garbage bin on the street"],
+  "fountain": ["a stone fountain", "a drinking fountain", "a water fountain"],
+  "bench": ["a park bench", "a bench to sit on"],
+  "_wall": ["a brick wall", "a wall"],
+  "_building": ["a building facade", "a building", "a shop front"],
+  "_car": ["a car", "a parked car"],
+  "_person": ["a person", "a selfie"],
+  "_ground": ["the pavement", "the ground", "an empty street"]
+}

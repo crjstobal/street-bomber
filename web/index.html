@@ -1,0 +1,1242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Street Bomber</title>
+<meta name="description" content="Bomberman on your real streets. Photograph what is on the corner and on-device AI turns it into your bomb.">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root{
+    --bg:#0b0d12;
+    --panel:rgba(14,17,24,.88);
+    --stroke:rgba(255,255,255,.10);
+    --txt:#e8ecf4;
+    --dim:#828da3;
+    --red:#ff3b4e;
+    --blue:#2f9bff;
+    --lime:#3ddc84;
+    --neutral:#39414f;
+    --hot:#ffe066;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,system-ui,sans-serif}
+  #map{position:absolute;inset:0;background:var(--bg)}
+  .leaflet-container{background:#0b0d12;font-family:inherit}
+  .dark-tiles{filter:invert(1) hue-rotate(180deg) brightness(.62) contrast(1.1) saturate(.35)}
+  .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
+
+  /* ---------- HUD ---------- */
+  .hud{position:absolute;z-index:600;pointer-events:none}
+  .hud > *{pointer-events:auto}
+
+  #top{top:0;left:0;right:0;padding:10px;display:flex;gap:10px;align-items:flex-start;
+       flex-wrap:wrap;padding-top:max(10px,env(safe-area-inset-top))}
+  .card{background:var(--panel);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+        border:1px solid var(--stroke);border-radius:14px;padding:10px 12px}
+  .brand{font-weight:800;letter-spacing:.14em;font-size:12px;line-height:1}
+  .brand small{display:block;font-weight:500;letter-spacing:.02em;color:var(--dim);font-size:10px;margin-top:4px}
+
+  #score{flex:1;min-width:190px;max-width:340px}
+  .srow{display:flex;align-items:center;gap:8px;margin:5px 0;font-size:11px}
+  .sdot{width:9px;height:9px;border-radius:3px;flex:none}
+  .sname{width:46px;color:var(--dim)}
+  .sbar{flex:1;height:7px;border-radius:4px;background:rgba(255,255,255,.07);overflow:hidden}
+  .sbar i{display:block;height:100%;width:0;border-radius:4px;transition:width .4s ease}
+  .sval{width:30px;text-align:right;font-size:11px}
+
+  #stock{display:flex;gap:5px;align-items:center}
+  .bomb-pip{width:16px;height:16px;border-radius:50%;border:2px solid rgba(255,255,255,.22);
+            transition:.25s;position:relative}
+  .bomb-pip.on{background:var(--red);border-color:var(--red);box-shadow:0 0 10px rgba(255,59,78,.7)}
+
+  #eyes{font-size:11px;color:var(--dim);display:flex;align-items:center;gap:7px}
+  #eyes b{color:var(--txt);font-weight:600}
+  #eyes.ready b{color:var(--lime)}
+
+  /* ---------- controls ---------- */
+  #bottom{bottom:0;left:0;right:0;padding:12px;display:flex;gap:10px;align-items:flex-end;
+          justify-content:center;padding-bottom:max(14px,env(safe-area-inset-bottom))}
+  .btn{border:1px solid var(--stroke);background:var(--panel);color:var(--txt);
+       font-weight:700;font-size:13px;letter-spacing:.04em;border-radius:14px;padding:14px 18px;
+       cursor:pointer;backdrop-filter:blur(14px);transition:.15s;user-select:none;font-family:inherit}
+  .btn:active{transform:scale(.96)}
+  .btn[disabled]{opacity:.35;cursor:not-allowed}
+  .btn.primary{background:linear-gradient(180deg,#ff4d5f,#e01d33);border-color:#ff6c7a;
+               box-shadow:0 6px 22px rgba(255,59,78,.35);min-width:150px}
+  .btn.ghost{padding:12px 14px;font-size:12px}
+  #defuse{position:relative;overflow:hidden;border-color:rgba(61,220,132,.5);color:var(--lime)}
+  #defuse .fill{position:absolute;inset:0;background:rgba(61,220,132,.28);width:0%;pointer-events:none}
+  #defuse span{position:relative}
+
+  /* ---------- side panel ---------- */
+  #side{position:absolute;right:10px;top:76px;width:228px;z-index:600;max-height:calc(100% - 170px);overflow:auto}
+  #side.collapsed .body{display:none}
+  #side .head{display:flex;justify-content:space-between;align-items:center;cursor:pointer;
+              font-size:11px;letter-spacing:.1em;color:var(--dim);font-weight:700}
+  #side .body{margin-top:10px}
+  .fld{margin:9px 0}
+  .fld label{display:flex;justify-content:space-between;font-size:11px;color:var(--dim);margin-bottom:5px}
+  .fld label b{color:var(--txt);font-weight:600}
+  input[type=range]{width:100%;accent-color:var(--red);height:16px}
+  .seg{display:flex;gap:4px;background:rgba(255,255,255,.05);padding:3px;border-radius:10px}
+  .seg button{flex:1;border:0;background:transparent;color:var(--dim);font-size:11px;font-weight:600;
+              padding:7px 4px;border-radius:8px;cursor:pointer;font-family:inherit}
+  .seg button.on{background:rgba(255,255,255,.13);color:var(--txt)}
+  .hint{font-size:10px;line-height:1.5;color:var(--dim);margin-top:10px;
+        border-top:1px solid var(--stroke);padding-top:9px}
+  kbd{background:rgba(255,255,255,.1);border-radius:4px;padding:1px 4px;font-size:9px;
+      font-family:ui-monospace,monospace}
+  .arsenal{margin:0;padding:0;list-style:none}
+  .arsenal li{display:flex;gap:8px;align-items:flex-start;font-size:11px;line-height:1.35;margin:7px 0}
+  .arsenal .ico{font-size:16px;width:20px;text-align:center;flex:none}
+  .arsenal b{display:block;font-size:11px}
+  .arsenal span{color:var(--dim);font-size:10px}
+
+  /* ---------- log ---------- */
+  #log{position:absolute;left:10px;bottom:82px;width:270px;z-index:600;pointer-events:none;
+       display:flex;flex-direction:column-reverse;gap:5px;max-height:34vh;overflow:hidden}
+  .logline{background:rgba(10,13,19,.82);border:1px solid var(--stroke);border-left:3px solid var(--dim);
+           border-radius:8px;padding:6px 9px;font-size:11px;line-height:1.35;
+           animation:slide .3s ease;backdrop-filter:blur(8px)}
+  @keyframes slide{from{opacity:0;transform:translateX(-14px)}}
+
+  /* ---------- markers ---------- */
+  .bomb-ico{display:grid;place-items:center;width:40px;height:40px;border-radius:50%;
+            font-size:10px;font-weight:800;color:#fff;border:2px solid #fff3;
+            animation:tick 1s infinite;position:relative}
+  .bomb-ico em{position:absolute;top:-9px;right:-9px;font-style:normal;font-size:16px;
+               filter:drop-shadow(0 1px 2px #000)}
+  .bomb-ico.urgent{animation:tick .3s infinite}
+  @keyframes tick{0%,100%{transform:scale(1)}50%{transform:scale(1.14)}}
+  .me-ico{width:20px;height:20px;border-radius:50%;background:var(--red);border:3px solid #fff;
+          box-shadow:0 0 0 6px rgba(255,59,78,.22),0 2px 8px #000}
+  .bot-ico{width:15px;height:15px;border-radius:50%;border:2px solid rgba(255,255,255,.75)}
+
+  /* ---------- camera ---------- */
+  #cam{position:absolute;inset:0;z-index:800;background:#000;display:none;flex-direction:column}
+  #cam.on{display:flex}
+  #cam .view{position:relative;flex:1;overflow:hidden;display:grid;place-items:center}
+  #cam video,#cam canvas,#cam img.shot{width:100%;height:100%;object-fit:cover;position:absolute;inset:0}
+  #cam .reticle{position:absolute;width:62vmin;height:62vmin;border:2px solid rgba(255,255,255,.55);
+                border-radius:22px;box-shadow:0 0 0 100vmax rgba(0,0,0,.28);pointer-events:none}
+  #cam .topbar{position:absolute;top:0;left:0;right:0;padding:12px;padding-top:max(12px,env(safe-area-inset-top));
+               display:flex;justify-content:space-between;align-items:flex-start;gap:10px;z-index:2}
+  #cam .prompt{font-size:13px;line-height:1.4;max-width:300px}
+  #cam .prompt b{display:block;font-size:15px;margin-bottom:2px}
+  .badge{display:inline-flex;align-items:center;gap:6px;font-size:10px;letter-spacing:.04em;
+         color:var(--lime);background:rgba(61,220,132,.12);border:1px solid rgba(61,220,132,.35);
+         border-radius:999px;padding:5px 9px;margin-top:8px}
+  #cam .controls{padding:14px;padding-bottom:max(16px,env(safe-area-inset-bottom));display:flex;
+                 gap:10px;justify-content:center;align-items:center;background:#0b0d12;flex-wrap:wrap}
+  #snap{width:74px;height:74px;border-radius:50%;border:4px solid #fff;background:var(--red);
+        cursor:pointer;box-shadow:0 0 0 4px rgba(255,59,78,.35)}
+  #snap[disabled]{opacity:.4}
+  #result{position:absolute;left:12px;right:12px;bottom:12px;z-index:3;display:none}
+  #result.on{display:block}
+  #result .card{padding:14px}
+  #result .kind{display:flex;align-items:center;gap:12px}
+  #result .kind .big{font-size:38px;line-height:1}
+  #result h3{margin:0;font-size:17px;letter-spacing:.06em}
+  #result p{margin:4px 0 0;font-size:12px;color:var(--dim);line-height:1.4}
+  #result .seen{font-size:11px;margin-top:10px;color:var(--dim)}
+  #result .bars{margin-top:6px}
+  #result .bar{display:flex;gap:8px;align-items:center;font-size:10px;margin:3px 0;color:var(--dim)}
+  #result .bar i{display:block;height:5px;border-radius:3px;background:var(--hot)}
+  #result .bar .lab{width:84px}
+  #result .row{display:flex;gap:8px;margin-top:12px}
+  #result .row .btn{flex:1}
+  #thinking{position:absolute;z-index:3;display:none;text-align:center;font-size:13px}
+  #thinking.on{display:block}
+
+  /* ---------- loader ---------- */
+  #load{position:absolute;inset:0;z-index:900;background:#0b0d12;display:grid;place-items:center;
+        text-align:center;padding:24px;transition:opacity .4s}
+  #load.done{opacity:0;pointer-events:none}
+  #load h1{font-size:26px;letter-spacing:.2em;margin:0 0 6px;font-weight:800}
+  #load p{color:var(--dim);font-size:12px;margin:6px 0;max-width:320px}
+  .spin{width:34px;height:34px;border:3px solid rgba(255,255,255,.12);border-top-color:var(--red);
+        border-radius:50%;animation:sp .8s linear infinite;margin:18px auto}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  #load .btn{margin-top:14px}
+
+  @media (max-width:560px){
+    #side{display:none}
+    #log{width:calc(100% - 20px);bottom:88px;max-height:26vh}
+    #score{max-width:none}
+  }
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div class="hud" id="top">
+  <div class="card brand">STREET<br>BOMBER<small>touch grass edition</small></div>
+  <div class="card" id="score">
+    <div class="srow"><i class="sdot" style="background:var(--red)"></i><span class="sname">YOU</span>
+      <span class="sbar"><i id="bar-red" style="background:var(--red)"></i></span><span class="sval mono" id="val-red">0</span></div>
+    <div class="srow"><i class="sdot" style="background:var(--blue)"></i><span class="sname">BLUE</span>
+      <span class="sbar"><i id="bar-blue" style="background:var(--blue)"></i></span><span class="sval mono" id="val-blue">0</span></div>
+    <div class="srow"><i class="sdot" style="background:var(--lime)"></i><span class="sname">GREEN</span>
+      <span class="sbar"><i id="bar-lime" style="background:var(--lime)"></i></span><span class="sval mono" id="val-lime">0</span></div>
+  </div>
+  <div class="card" id="stock" title="Bombs available"></div>
+  <div class="card" id="eyes" title="On-device vision model">👁️ <span>AI eyes <b id="eyes-val">waiting</b></span></div>
+</div>
+
+<div class="card" id="side">
+  <div class="head" id="side-head"><span>ARSENAL &amp; SETTINGS</span><span id="side-caret">▾</span></div>
+  <div class="body">
+    <ul class="arsenal" id="arsenal"></ul>
+    <div class="hint" style="margin-top:4px"></div>
+    <div class="fld"><label>Fuse <b><span id="v-fuse">20</span>s</b></label>
+      <input type="range" id="r-fuse" min="5" max="120" step="5" value="20"></div>
+    <div class="fld"><label>Decay <b><span id="v-decay">180</span>s</b></label>
+      <input type="range" id="r-decay" min="30" max="900" step="30" value="180"></div>
+    <div class="fld"><label>Bot rivals <b><span id="v-bots">2</span></b></label>
+      <input type="range" id="r-bots" min="0" max="4" step="1" value="2"></div>
+    <div class="fld"><label>Movement</label>
+      <div class="seg" id="movemode">
+        <button data-mode="dev" class="on">Demo (click / WASD)</button>
+        <button data-mode="gps">Real GPS</button>
+      </div></div>
+    <button class="btn ghost" id="reload" style="width:100%;margin-top:8px">Load streets around map center</button>
+    <div class="hint">
+      <kbd>WASD</kbd>/arrows to walk · click the map to walk there · <kbd>space</kbd> to plant.
+      In demo mode you can feed the camera a photo file instead of a live shot.
+    </div>
+  </div>
+</div>
+
+<div id="log"></div>
+
+<div class="hud" id="bottom">
+  <button class="btn ghost" id="mute">🔊</button>
+  <button class="btn primary" id="plant">📷 PLANT BOMB</button>
+  <button class="btn ghost" id="defuse" style="display:none"><i class="fill"></i><span>DEFUSE</span></button>
+</div>
+
+<div id="cam">
+  <div class="view">
+    <video id="cam-video" playsinline muted autoplay></video>
+    <img class="shot" id="cam-shot" alt="" style="display:none">
+    <div class="reticle" id="cam-reticle"></div>
+    <div class="topbar">
+      <div class="card prompt">
+        <b>Arm your bomb</b>
+        Point at something on this corner: a lamp post, a tree, a bin, a bench, a fountain, a traffic light.
+        <div class="badge">🔒 On-device AI · the photo never leaves your phone</div>
+      </div>
+      <button class="btn ghost" id="cam-close">✕</button>
+    </div>
+    <div id="thinking" class="card"><div class="spin" style="margin:6px auto 10px"></div><span id="thinking-msg">Looking…</span></div>
+    <div id="result">
+      <div class="card">
+        <div class="kind"><div class="big" id="res-ico"></div>
+          <div><h3 id="res-name"></h3><p id="res-desc"></p></div></div>
+        <div class="seen" id="res-seen"></div>
+        <div class="bars" id="res-bars"></div>
+        <div class="row">
+          <button class="btn ghost" id="res-retake">Retake</button>
+          <button class="btn primary" id="res-plant">PLANT IT</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="controls">
+    <button id="snap" aria-label="Take photo"></button>
+    <label class="btn ghost" id="cam-file-lbl">🖼️ Use a photo file
+      <input type="file" id="cam-file" accept="image/*" style="display:none"></label>
+  </div>
+</div>
+
+<div id="load">
+  <div>
+    <h1>STREET BOMBER</h1>
+    <p>Bomberman on your real streets. Your bombs are made of whatever you find on the corner.</p>
+    <div class="spin"></div>
+    <p id="load-msg" class="mono">finding your position…</p>
+    <button class="btn ghost" id="load-retry" style="display:none">Retry</button>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script type="module">
+import { loadVision, visionReady, classify } from './vision.js';
+
+/* ============================================================
+   CONFIG
+   ============================================================ */
+const CFG = {
+  radius: 500,        // metres of street network loaded around the start point
+  fuseMs: 20000,
+  decayMs: 180000,
+  maxTurn: 62,        // degrees: sharpest turn the blast can follow
+  plantDist: 50,      // metres to a crossing to be able to plant
+  defuseDist: 45,
+  defuseHold: 2200,
+  maxBombs: 3,
+  regenMs: 15000,
+  stepMeters: 14,     // keyboard step
+  botTick: 2600,
+  botCount: 2,
+  fortMs: 300000,     // bench bombs: how long claimed streets stay locked
+  rootsEvery: 5000,   // tree bombs: growth interval
+  rootsSteps: 6,
+};
+
+const TEAMS = {
+  red:  { name:'YOU',   color:'#ff3b4e' },
+  blue: { name:'BLUE',  color:'#2f9bff' },
+  lime: { name:'GREEN', color:'#3ddc84' },
+};
+const NEUTRAL = '#39414f';
+
+// What the street object turns into. Keys match tools/classes.json.
+const BOMBS = {
+  lamp:         { ico:'⚡', name:'SPARK',     obj:'lamp post',     range:7, desc:'Runs down the whole street in a straight line.' },
+  trafficlight: { ico:'🚦', name:'CROSSFIRE', obj:'traffic light', range:2, area:true, desc:'Turns every corner: takes the whole block.' },
+  tree:         { ico:'🌳', name:'ROOTS',     obj:'tree',          range:2, desc:'Keeps growing into the streets next to it.' },
+  bin:          { ico:'♻️', name:'SCRAP',     obj:'bin',           range:2, desc:'Recycled: refills your bomb stock.' },
+  fountain:     { ico:'💧', name:'FLOOD',     obj:'fountain',      range:4, desc:'Washes rival streets back to neutral and drowns their bombs.' },
+  bench:        { ico:'🛡️', name:'FORT',      obj:'bench',         range:2, desc:'Streets it takes cannot be stolen for 5 minutes.' },
+  none:         { ico:'🧨', name:'FIRECRACKER', obj:null,          range:1, desc:'Nothing usable in the shot. Get closer to a real object for a better bomb.' },
+};
+const BOT_POOL = ['lamp','tree','bin','bench','trafficlight','none','none','fountain'];
+
+/* ============================================================
+   STATE
+   ============================================================ */
+let map, graphLayer, fxLayer;
+let nodes = new Map();      // key -> {key,lat,lon,segs:[]}
+let segs  = new Map();      // id  -> {id,a,b,pts,name,owner,ownedAt,fortUntil,fortTeam,line}
+let segId = 0;
+
+let me = { lat:0, lon:0, marker:null, bombs:CFG.maxBombs, lastRegen:0 };
+let bombs = new Map();      // id -> {id,nodeKey,team,at,fuse,kind,marker}
+let bombId = 0;
+let bots = [];
+let moveMode = 'dev';
+let geoWatch = null;
+let muted = false;
+let audioCtx = null;
+
+/* ============================================================
+   GEO UTILS
+   ============================================================ */
+const R = 6371000;
+const rad = d => d * Math.PI / 180;
+
+function dist(a, b) { // [lat,lon] in metres
+  const dφ = rad(b[0]-a[0]), dλ = rad(b[1]-a[1]);
+  const x = dλ * Math.cos(rad((a[0]+b[0])/2));
+  return Math.hypot(dφ, x) * R;
+}
+function bearing(p1, p2) {
+  const φ1=rad(p1[0]), φ2=rad(p2[0]), Δλ=rad(p2[1]-p1[1]);
+  const y = Math.sin(Δλ)*Math.cos(φ2);
+  const x = Math.cos(φ1)*Math.sin(φ2) - Math.sin(φ1)*Math.cos(φ2)*Math.cos(Δλ);
+  return (Math.atan2(y,x)*180/Math.PI + 360) % 360;
+}
+function angleDiff(a, b) { const d = Math.abs(a-b) % 360; return d > 180 ? 360-d : d; }
+function polyLen(pts) { let s=0; for(let i=1;i<pts.length;i++) s += dist(pts[i-1],pts[i]); return s; }
+const nkey = p => p[0].toFixed(7) + ',' + p[1].toFixed(7);
+const offsetLat = (lat, m) => lat + (m / R) * (180/Math.PI);
+const offsetLon = (lat, lon, m) => lon + (m / (R*Math.cos(rad(lat)))) * (180/Math.PI);
+
+/* ============================================================
+   STREET NETWORK (Overpass)
+   ============================================================ */
+const MIRRORS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+];
+const DEMO = { lat:40.4169, lon:-3.7035, file:'demo-streets.json' }; // Madrid, Puerta del Sol
+
+function overpassQuery(lat, lon, radius) {
+  const dLat = (radius / R) * (180/Math.PI);
+  const dLon = (radius / (R*Math.cos(rad(lat)))) * (180/Math.PI);
+  const bbox = [lat-dLat, lon-dLon, lat+dLat, lon+dLon].map(n => n.toFixed(6)).join(',');
+  return `[out:json][timeout:40];
+(
+  way["highway"]
+     ["highway"!~"^(motorway|motorway_link|trunk|trunk_link|construction|proposed|raceway|bus_guideway|escape|corridor|elevator|platform)$"]
+     ["area"!="yes"]
+     ["access"!="private"]
+     ["footway"!="sidewalk"]["footway"!="crossing"]
+     ["service"!~"^(parking_aisle|driveway)$"]
+     (${bbox});
+);
+out geom;`;
+}
+
+async function fetchStreets(lat, lon) {
+  const q = overpassQuery(lat, lon, CFG.radius);
+  let lastErr;
+  for (const url of MIRRORS) {
+    try {
+      setLoadMsg('asking ' + new URL(url).hostname + '…');
+      const res = await fetch(url, { method:'POST', body:'data=' + encodeURIComponent(q),
+        headers:{'Content-Type':'application/x-www-form-urlencoded'} });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const json = await res.json();
+      if (json.elements && json.elements.length) return json.elements;
+      throw new Error('no streets in this area');
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error('Overpass is not responding');
+}
+
+/* ============================================================
+   GRAPH: crossings = nodes, street stretches = edges
+   ============================================================ */
+function buildGraph(elements) {
+  nodes = new Map(); segs = new Map(); segId = 0;
+
+  // 1. count how often each coordinate appears -> crossings are shared
+  const count = new Map();
+  const ways = [];
+  for (const el of elements) {
+    if (el.type !== 'way' || !el.geometry || el.geometry.length < 2) continue;
+    const pts = el.geometry.map(g => [g.lat, g.lon]);
+    ways.push({ pts, name: (el.tags && el.tags.name) || null });
+    for (const p of pts) { const k = nkey(p); count.set(k, (count.get(k)||0) + 1); }
+  }
+  if (!ways.length) throw new Error('the street map came back empty');
+
+  // 2. a point is a node if 2+ ways share it, or if it is a dead end
+  const isNode = new Set();
+  for (const [k,c] of count) if (c >= 2) isNode.add(k);
+  for (const w of ways) { isNode.add(nkey(w.pts[0])); isNode.add(nkey(w.pts[w.pts.length-1])); }
+
+  const getNode = p => {
+    const k = nkey(p);
+    if (!nodes.has(k)) nodes.set(k, { key:k, lat:p[0], lon:p[1], segs:[] });
+    return nodes.get(k);
+  };
+
+  // 3. split every way at its nodes
+  for (const w of ways) {
+    let cur = [w.pts[0]];
+    for (let i = 1; i < w.pts.length; i++) {
+      cur.push(w.pts[i]);
+      if (isNode.has(nkey(w.pts[i]))) {
+        addSeg(cur, w.name, getNode);
+        cur = [w.pts[i]];
+      }
+    }
+  }
+
+  // 4. merge degree-2 nodes (not crossings, just OSM way splits)
+  mergeDegree2();
+
+  // 5. drop orphan nodes
+  for (const [k,n] of [...nodes]) if (!n.segs.length) nodes.delete(k);
+}
+
+function addSeg(pts, name, getNode) {
+  if (pts.length < 2) return;
+  const A = getNode(pts[0]), B = getNode(pts[pts.length-1]);
+  if (A.key === B.key) return; // degenerate loop
+  const s = { id:segId++, a:A.key, b:B.key, pts, name, owner:null, ownedAt:0, fortUntil:0, fortTeam:null, line:null };
+  s.len = polyLen(pts);
+  segs.set(s.id, s);
+  A.segs.push(s.id); B.segs.push(s.id);
+}
+
+function mergeDegree2() {
+  let changed = true, guard = 0;
+  while (changed && guard++ < 40) {
+    changed = false;
+    for (const k of [...nodes.keys()]) {
+      const n = nodes.get(k);
+      if (!n || n.segs.length !== 2) continue;
+      const [i1, i2] = n.segs;
+      if (i1 === i2) continue;
+      const s1 = segs.get(i1), s2 = segs.get(i2);
+      if (!s1 || !s2) continue;
+
+      const p1 = s1.b === k ? s1.pts : [...s1.pts].reverse();
+      const o1 = s1.b === k ? s1.a : s1.b;
+      const p2 = s2.a === k ? s2.pts : [...s2.pts].reverse();
+      const o2 = s2.a === k ? s2.b : s2.a;
+      if (o1 === o2) continue; // would create a loop
+
+      const merged = { id:segId++, a:o1, b:o2, pts:p1.concat(p2.slice(1)),
+                       name:s1.name || s2.name, owner:null, ownedAt:0, fortUntil:0, fortTeam:null, line:null };
+      merged.len = polyLen(merged.pts);
+      segs.set(merged.id, merged);
+      segs.delete(i1); segs.delete(i2);
+      for (const ok of [o1, o2]) {
+        const on = nodes.get(ok);
+        on.segs = on.segs.filter(x => x !== i1 && x !== i2);
+        on.segs.push(merged.id);
+      }
+      nodes.delete(k);
+      changed = true;
+    }
+  }
+}
+
+/* ============================================================
+   BLAST: straight down the street until it cannot turn
+   ============================================================ */
+function bearingArriving(seg, endKey) {
+  const p = seg.pts;
+  return seg.b === endKey ? bearing(p[p.length-2], p[p.length-1]) : bearing(p[1], p[0]);
+}
+function bearingLeaving(seg, startKey) {
+  const p = seg.pts;
+  return seg.a === startKey ? bearing(p[0], p[1]) : bearing(p[p.length-1], p[p.length-2]);
+}
+
+function computeRays(startKey, range) {
+  const start = nodes.get(startKey);
+  if (!start) return [];
+  const rays = [];
+  for (const first of start.segs) {
+    const ray = [];
+    let curNode = startKey, curSeg = first;
+    for (let step = 0; step < range; step++) {
+      ray.push(curSeg);
+      const seg = segs.get(curSeg);
+      if (!seg) break;
+      const nextKey = seg.a === curNode ? seg.b : seg.a;
+      const nextNode = nodes.get(nextKey);
+      if (!nextNode) break;
+      const arrive = bearingArriving(seg, nextKey);
+      let best = null, bestDiff = Infinity;
+      for (const cand of nextNode.segs) {
+        if (cand === curSeg) continue;
+        const cs = segs.get(cand);
+        if (!cs) continue;
+        const d = angleDiff(arrive, bearingLeaving(cs, nextKey));
+        if (d < bestDiff) { bestDiff = d; best = cand; }
+      }
+      if (best === null || bestDiff > CFG.maxTurn) break;
+      curNode = nextKey; curSeg = best;
+    }
+    if (ray.length) rays.push(ray);
+  }
+  return rays;
+}
+
+// Crossfire: breadth-first over every street, turning at every corner.
+// Returned as rays of one segment per step so the animation reads as a wave.
+function computeArea(startKey, depth) {
+  const steps = [];
+  const seen = new Set();
+  let frontier = [startKey];
+  const visitedNodes = new Set([startKey]);
+  for (let d = 0; d < depth; d++) {
+    const next = [];
+    for (const nk of frontier) {
+      const n = nodes.get(nk); if (!n) continue;
+      for (const sid of n.segs) {
+        if (seen.has(sid)) continue;
+        seen.add(sid);
+        steps.push({ sid, step:d });
+        const s = segs.get(sid);
+        const other = s.a === nk ? s.b : s.a;
+        if (!visitedNodes.has(other)) { visitedNodes.add(other); next.push(other); }
+      }
+    }
+    frontier = next;
+  }
+  return steps;
+}
+
+/* ============================================================
+   RENDER
+   ============================================================ */
+function drawGraph() {
+  graphLayer.clearLayers();
+  for (const s of segs.values()) {
+    s.line = L.polyline(s.pts, { color:NEUTRAL, weight:4, opacity:.7, lineCap:'round' })
+      .addTo(graphLayer);
+    s.line.on('click', ev => { L.DomEvent.stop(ev); walkTo(ev.latlng.lat, ev.latlng.lng); });
+  }
+  refreshScore();
+}
+
+function paintSeg(s) {
+  if (!s.line) return;
+  if (s.owner) s.line.setStyle({ color:TEAMS[s.owner].color, weight: isFort(s) ? 8 : 6, opacity:.95,
+                                 dashArray: isFort(s) ? '2 7' : null });
+  else s.line.setStyle({ color:NEUTRAL, weight:4, opacity:.7, dashArray:null });
+}
+const isFort = s => s.fortUntil > Date.now();
+
+function refreshScore() {
+  const c = { red:0, blue:0, lime:0 };
+  for (const s of segs.values()) if (s.owner) c[s.owner]++;
+  const total = Math.max(segs.size, 1);
+  for (const t of Object.keys(TEAMS)) {
+    document.getElementById('bar-'+t).style.width = (c[t]/total*100).toFixed(1) + '%';
+    document.getElementById('val-'+t).textContent = c[t];
+  }
+}
+
+function refreshStock() {
+  const el = document.getElementById('stock');
+  el.innerHTML = '';
+  for (let i = 0; i < CFG.maxBombs; i++) {
+    const d = document.createElement('div');
+    d.className = 'bomb-pip' + (i < me.bombs ? ' on' : '');
+    el.appendChild(d);
+  }
+  document.getElementById('plant').disabled = me.bombs <= 0;
+}
+
+function log(msg, color) {
+  const el = document.createElement('div');
+  el.className = 'logline';
+  el.style.borderLeftColor = color || 'var(--dim)';
+  el.innerHTML = msg;
+  const box = document.getElementById('log');
+  box.prepend(el);
+  while (box.children.length > (innerWidth < 560 ? 4 : 7)) box.lastChild.remove();
+  setTimeout(() => { el.style.transition='.6s'; el.style.opacity='0'; }, 9000);
+}
+
+function flashSeg(s, color) {
+  if (!s || !s.line) return;
+  s.line.setStyle({ color: color || '#ffffff', weight:9, opacity:1, dashArray:null });
+  setTimeout(() => { paintSeg(s); refreshScore(); }, 240);
+}
+
+/* ============================================================
+   BOMBS
+   ============================================================ */
+function nearestNode(lat, lon, maxD) {
+  let best = null, bd = Infinity;
+  for (const n of nodes.values()) {
+    const d = dist([lat,lon], [n.lat,n.lon]);
+    if (d < bd) { bd = d; best = n; }
+  }
+  return (best && bd <= maxD) ? best : null;
+}
+
+function plantBomb(nodeKey, team, fuse, kind) {
+  const n = nodes.get(nodeKey);
+  if (!n) return null;
+  const b = { id:bombId++, nodeKey, team, at:Date.now(), fuse, kind, marker:null, exploded:false };
+  const col = TEAMS[team].color;
+  b.marker = L.marker([n.lat, n.lon], {
+    interactive:false,
+    icon: L.divIcon({ className:'', iconSize:[40,40], iconAnchor:[20,20],
+      html:`<div class="bomb-ico" style="background:${col}cc;box-shadow:0 0 18px ${col}99">
+              <span class="mono">${Math.ceil(fuse/1000)}</span><em>${BOMBS[kind].ico}</em></div>` })
+  }).addTo(fxLayer);
+  bombs.set(b.id, b);
+  sfx('plant');
+  return b;
+}
+
+function claim(s, team) {
+  if (isFort(s) && s.fortTeam !== team) return false;
+  s.owner = team; s.ownedAt = Date.now();
+  return true;
+}
+
+function detonate(b, depth) {
+  if (!b || b.exploded) return;
+  b.exploded = true;
+  bombs.delete(b.id);
+  if (b.marker) fxLayer.removeLayer(b.marker);
+
+  const kind = BOMBS[b.kind];
+  const node = nodes.get(b.nodeKey);
+  const col = TEAMS[b.team].color;
+  sfx('boom');
+
+  // flash at the crossing
+  if (node) {
+    const c = L.circleMarker([node.lat, node.lon],
+      { radius:6, color:'#fff', fillColor:'#fff', fillOpacity:.9, weight:0 }).addTo(fxLayer);
+    let r = 6;
+    const iv = setInterval(() => {
+      r += 4; c.setRadius(r); c.setStyle({ fillOpacity:Math.max(0,.9 - r/50), color:col });
+      if (r > 46) { clearInterval(iv); fxLayer.removeLayer(c); }
+    }, 26);
+  }
+
+  // which stretches the blast reaches, and when
+  const hits = kind.area
+    ? computeArea(b.nodeKey, kind.range)
+    : computeRays(b.nodeKey, kind.range).flatMap(ray => ray.map((sid, i) => ({ sid, step:i })));
+
+  const touched = new Set();
+  let maxStep = 0, washed = 0, blocked = 0;
+  for (const { sid, step } of hits) {
+    if (touched.has(sid)) continue;
+    touched.add(sid);
+    maxStep = Math.max(maxStep, step + 1);
+    setTimeout(() => {
+      const s = segs.get(sid);
+      if (!s || !s.line) return;
+      if (b.kind === 'fountain' && s.owner && s.owner !== b.team) {
+        if (!isFort(s)) { s.owner = null; washed++; }
+        else blocked++;
+        flashSeg(s, '#7fd3ff');
+        return;
+      }
+      if (!claim(s, b.team)) { blocked++; flashSeg(s, '#888'); return; }
+      if (b.kind === 'bench') { s.fortUntil = Date.now() + CFG.fortMs; s.fortTeam = b.team; }
+      flashSeg(s);
+    }, step * 85);
+  }
+
+  const name = segs.get(hits[0]?.sid)?.name;
+  log(`${kind.ico} <b>${TEAMS[b.team].name}</b> · ${kind.name} hits ${touched.size} stretches` +
+      (name ? ` · <span style="color:var(--dim)">${name}</span>` : ''), col);
+
+  // per-kind side effects
+  if (b.kind === 'bin') {
+    if (b.team === 'red') { me.bombs = CFG.maxBombs; refreshStock(); log('♻️ Scrap recycled: <b>bomb stock refilled</b>', 'var(--lime)'); }
+    else { const bot = bots.find(x => x.team === b.team); if (bot) bot.bombs = 2; }
+  }
+  if (b.kind === 'tree') growRoots(b.team, touched);
+  setTimeout(() => {
+    if (washed) log(`💧 Flood washed ${washed} rival stretches back to neutral`, '#7fd3ff');
+    if (blocked) log(`🛡️ ${blocked} stretches held by a fort`, 'var(--dim)');
+  }, maxStep * 85 + 300);
+
+  // bombs sitting on a hit stretch: chain reaction, or drowned by a flood
+  const caught = [];
+  for (const other of bombs.values()) {
+    if (other.exploded) continue;
+    for (const sid of touched) {
+      const s = segs.get(sid);
+      if (s && (s.a === other.nodeKey || s.b === other.nodeKey)) { caught.push(other); break; }
+    }
+  }
+  if (b.kind === 'fountain') {
+    const drowned = caught.filter(o => o.team !== b.team);
+    drowned.forEach(o => { o.exploded = true; bombs.delete(o.id); if (o.marker) fxLayer.removeLayer(o.marker); });
+    if (drowned.length) log(`💧 <b>${drowned.length} rival bomb${drowned.length>1?'s':''} drowned</b>`, '#7fd3ff');
+  } else if (caught.length && (depth||0) < 6) {
+    log(`⛓️ <b>CHAIN REACTION ×${caught.length}</b>`, 'var(--hot)');
+    caught.forEach((o, i) => setTimeout(() => detonate(o, (depth||0)+1), 220 + i*120 + maxStep*40));
+  }
+
+  // player caught in a rival blast
+  if (b.team !== 'red' && b.kind !== 'fountain') {
+    for (const sid of touched) {
+      const s = segs.get(sid);
+      if (s && s.line && nearPolyline([me.lat, me.lon], s.pts) < 30) {
+        log('☠️ <b>You got caught in the blast</b> · you lose a bomb', 'var(--red)');
+        me.bombs = Math.max(0, me.bombs - 1); refreshStock();
+        break;
+      }
+    }
+  }
+}
+
+// Tree bombs keep spreading into neighbouring stretches for a while.
+function growRoots(team, start) {
+  const mine = new Set(start);
+  let n = 0;
+  const iv = setInterval(() => {
+    if (++n > CFG.rootsSteps) return clearInterval(iv);
+    const frontier = [];
+    for (const sid of mine) {
+      const s = segs.get(sid);
+      if (!s || s.owner !== team) continue;
+      for (const nk of [s.a, s.b]) for (const cand of nodes.get(nk)?.segs || []) {
+        const c = segs.get(cand);
+        if (c && c.owner !== team && !mine.has(cand) && !(isFort(c) && c.fortTeam !== team)) frontier.push(cand);
+      }
+    }
+    if (!frontier.length) return clearInterval(iv);
+    const pick = frontier[Math.floor(Math.random() * frontier.length)];
+    const s = segs.get(pick);
+    if (claim(s, team)) { mine.add(pick); flashSeg(s, '#9be37a'); }
+  }, CFG.rootsEvery);
+}
+
+function nearPolyline(p, pts) {
+  let best = Infinity;
+  for (const q of pts) best = Math.min(best, dist(p, q));
+  return best;
+}
+
+function tickBombs() {
+  const now = Date.now();
+  for (const b of [...bombs.values()]) {
+    const left = b.fuse - (now - b.at);
+    if (left <= 0) { detonate(b, 0); continue; }
+    const el = b.marker.getElement()?.querySelector('.bomb-ico');
+    if (el) {
+      el.querySelector('span').textContent = Math.ceil(left/1000);
+      el.classList.toggle('urgent', left < 5000);
+    }
+  }
+}
+
+/* ============================================================
+   TERRITORY DECAY
+   ============================================================ */
+function tickDecay() {
+  const now = Date.now();
+  for (const s of segs.values()) {
+    if (!s.owner) continue;
+    if (isFort(s)) { s.ownedAt = now; continue; }
+    if (s.fortTeam) { s.fortTeam = null; paintSeg(s); }
+    const age = now - s.ownedAt;
+    if (age > CFG.decayMs) { s.owner = null; paintSeg(s); }
+    else if (s.line) s.line.setStyle({ opacity: 0.35 + 0.6 * (1 - age/CFG.decayMs) });
+  }
+  refreshScore();
+}
+
+/* ============================================================
+   PLAYER
+   ============================================================ */
+function setMe(lat, lon, recenter) {
+  me.lat = lat; me.lon = lon;
+  if (!me.marker) {
+    me.marker = L.marker([lat,lon], { zIndexOffset:1000, interactive:false,
+      icon: L.divIcon({ className:'', iconSize:[20,20], iconAnchor:[10,10], html:'<div class="me-ico"></div>' })
+    }).addTo(fxLayer);
+  } else me.marker.setLatLng([lat,lon]);
+  if (recenter) map.panTo([lat,lon], { animate:true, duration:.4 });
+  updateDefuseButton();
+}
+
+function walkTo(lat, lon) {
+  if (moveMode !== 'dev') return;
+  const from = [me.lat, me.lon], to = [lat, lon];
+  const t0 = performance.now(), dur = 420;
+  (function step(t) {
+    const k = Math.min(1, (t - t0) / dur);
+    const e = k < .5 ? 2*k*k : 1 - Math.pow(-2*k+2,2)/2;
+    setMe(from[0] + (to[0]-from[0])*e, from[1] + (to[1]-from[1])*e, false);
+    if (k < 1) requestAnimationFrame(step);
+  })(t0);
+}
+
+function nudge(dLat, dLon) {
+  if (moveMode !== 'dev') return;
+  setMe(offsetLat(me.lat, dLat), offsetLon(me.lat, me.lon, dLon), false);
+  const p = map.latLngToContainerPoint([me.lat, me.lon]);
+  const s = map.getSize();
+  if (p.x < 90 || p.y < 110 || p.x > s.x-90 || p.y > s.y-140) map.panTo([me.lat, me.lon]);
+}
+
+function tryPlant() {
+  if (me.bombs <= 0) { log('Out of bombs · wait for them to recharge', 'var(--dim)'); return; }
+  const n = nearestNode(me.lat, me.lon, CFG.plantDist);
+  if (!n) { log('🚫 No crossing within ' + CFG.plantDist + ' m · walk to a corner', 'var(--dim)'); return; }
+  if ([...bombs.values()].some(b => b.nodeKey === n.key)) {
+    log('There is already a bomb on that crossing', 'var(--dim)'); return;
+  }
+  openCamera(n.key);
+}
+
+function commitPlant(nodeKey, kind) {
+  if (me.bombs <= 0) return;
+  me.bombs--; refreshStock();
+  plantBomb(nodeKey, 'red', CFG.fuseMs, kind);
+  const k = BOMBS[kind];
+  log(`${k.ico} <b>${k.name}</b> planted · fuse ${Math.round(CFG.fuseMs/1000)}s`, 'var(--red)');
+}
+
+/* --- defuse --- */
+let defuseTarget = null, defuseTimer = null, defuseStart = 0;
+
+function updateDefuseButton() {
+  let best = null, bd = Infinity;
+  for (const b of bombs.values()) {
+    if (b.team === 'red') continue;
+    const n = nodes.get(b.nodeKey); if (!n) continue;
+    const d = dist([me.lat,me.lon],[n.lat,n.lon]);
+    if (d < bd) { bd = d; best = b; }
+  }
+  const btn = document.getElementById('defuse');
+  if (best && bd <= CFG.defuseDist) { defuseTarget = best; btn.style.display=''; }
+  else { defuseTarget = null; btn.style.display='none'; cancelDefuse(); }
+}
+function startDefuse() {
+  if (!defuseTarget) return;
+  defuseStart = performance.now();
+  const fill = document.querySelector('#defuse .fill');
+  defuseTimer = setInterval(() => {
+    const k = Math.min(1, (performance.now()-defuseStart)/CFG.defuseHold);
+    fill.style.width = (k*100) + '%';
+    if (k >= 1) {
+      const b = defuseTarget;
+      cancelDefuse();
+      if (b && !b.exploded) {
+        bombs.delete(b.id); b.exploded = true;
+        if (b.marker) fxLayer.removeLayer(b.marker);
+        me.bombs = Math.min(CFG.maxBombs, me.bombs + 1); refreshStock();
+        log('✂️ <b>Bomb defused</b> · you keep the parts', 'var(--lime)');
+        sfx('defuse');
+      }
+      updateDefuseButton();
+    }
+  }, 40);
+}
+function cancelDefuse() {
+  if (defuseTimer) clearInterval(defuseTimer);
+  defuseTimer = null;
+  const f = document.querySelector('#defuse .fill'); if (f) f.style.width = '0%';
+}
+
+/* ============================================================
+   CAMERA + ON-DEVICE VISION
+   ============================================================ */
+const $ = id => document.getElementById(id);
+let camStream = null, camNode = null, camKind = null;
+
+async function openCamera(nodeKey) {
+  camNode = nodeKey; camKind = null;
+  $('cam').classList.add('on');
+  resetShot();
+  if (!visionReady()) startVision();
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode:{ ideal:'environment' }, width:{ ideal:1280 } }, audio:false });
+    $('cam-video').srcObject = camStream;
+    $('snap').disabled = false;
+  } catch (e) {
+    $('snap').disabled = true;
+    log('📷 No camera available · use a photo file instead', 'var(--hot)');
+  }
+}
+
+function closeCamera() {
+  $('cam').classList.remove('on');
+  if (camStream) camStream.getTracks().forEach(t => t.stop());
+  camStream = null;
+}
+
+function resetShot() {
+  $('cam-shot').style.display = 'none';
+  $('cam-video').style.display = '';
+  $('cam-reticle').style.display = '';
+  $('result').classList.remove('on');
+  $('thinking').classList.remove('on');
+  $('snap').style.visibility = '';
+}
+
+async function snap() {
+  const v = $('cam-video');
+  if (!v.videoWidth) return;
+  const c = document.createElement('canvas');
+  c.width = v.videoWidth; c.height = v.videoHeight;
+  c.getContext('2d').drawImage(v, 0, 0);
+  const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.9));
+  sfx('plant');
+  await analyse(blob);
+}
+
+async function analyse(blob) {
+  const shot = $('cam-shot');
+  shot.src = URL.createObjectURL(blob);
+  shot.style.display = '';
+  $('cam-video').style.display = 'none';
+  $('cam-reticle').style.display = 'none';
+  $('snap').style.visibility = 'hidden';
+  $('thinking').classList.add('on');
+  $('thinking-msg').textContent = visionReady() ? 'Looking…' : 'Downloading the AI eyes (once)…';
+
+  let r;
+  try { r = await classify(blob); }
+  catch (e) {
+    $('thinking').classList.remove('on');
+    log('Vision failed: ' + e.message, 'var(--hot)');
+    resetShot(); return;
+  }
+  $('thinking').classList.remove('on');
+
+  camKind = r.cls || 'none';
+  const k = BOMBS[camKind];
+  $('res-ico').textContent = k.ico;
+  $('res-name').textContent = k.name + ' BOMB';
+  $('res-desc').textContent = k.desc;
+  const far = !r.cls && !r.seen.startsWith('_');
+  $('res-seen').innerHTML = r.cls
+    ? `I see a <b>${k.obj}</b> · ${Math.round(r.confidence*100)}% sure · ${r.ms} ms on this device`
+    : far
+      ? `Maybe a <b>${BOMBS[r.seen].obj}</b>, but it is too far or blurry to arm. Get closer and retake. (${r.ms} ms on this device)`
+      : `I mostly see <b>${r.seen.slice(1)}</b> · nothing I can build a bomb from (${r.ms} ms on this device)`;
+  const top = r.ranked.filter(([c]) => !c.startsWith('_')).slice(0, 3);
+  const max = Math.max(...top.map(t => t[1]), 1e-6);
+  $('res-bars').innerHTML = top.map(([c, s]) =>
+    `<div class="bar"><span class="lab">${BOMBS[c].ico} ${BOMBS[c].obj}</span>` +
+    `<i style="width:${Math.max(4, s/max*120)}px;opacity:${c===r.cls?1:.35}"></i></div>`).join('');
+  $('result').classList.add('on');
+}
+
+function startVision() {
+  const el = $('eyes-val');
+  el.textContent = '0%';
+  loadVision((frac, total) => {
+    el.textContent = Math.round(frac*100) + '% of ' + Math.round(total/1e6) + ' MB';
+  }).then(() => {
+    el.textContent = 'ready ✓';
+    $('eyes').classList.add('ready');
+    log('👁️ AI eyes loaded · runs fully on this device', 'var(--lime)');
+  }).catch(e => {
+    el.textContent = 'failed';
+    log('AI eyes failed to load: ' + e.message, 'var(--hot)');
+  });
+}
+
+$('snap').onclick = () => { ac(); snap(); };
+$('cam-close').onclick = closeCamera;
+$('res-retake').onclick = resetShot;
+$('res-plant').onclick = () => { commitPlant(camNode, camKind); closeCamera(); };
+$('cam-file').onchange = e => {
+  const f = e.target.files[0];
+  e.target.value = '';
+  if (f) analyse(f);
+};
+
+/* ============================================================
+   BOTS
+   ============================================================ */
+function spawnBots(n) {
+  bots.forEach(b => b.marker && fxLayer.removeLayer(b.marker));
+  bots = [];
+  const keys = [...nodes.keys()];
+  if (!keys.length) return;
+  const teams = ['blue','lime','blue','lime'];
+  for (let i = 0; i < n; i++) {
+    const k = keys[Math.floor(Math.random()*keys.length)];
+    const nd = nodes.get(k);
+    const team = teams[i % teams.length];
+    const bot = { team, nodeKey:k, bombs:2, marker:null };
+    bot.marker = L.marker([nd.lat, nd.lon], { interactive:false,
+      icon: L.divIcon({ className:'', iconSize:[15,15], iconAnchor:[7,7],
+        html:`<div class="bot-ico" style="background:${TEAMS[team].color};box-shadow:0 0 10px ${TEAMS[team].color}"></div>` })
+    }).addTo(fxLayer);
+    bots.push(bot);
+  }
+}
+
+function tickBots() {
+  for (const bot of bots) {
+    const n = nodes.get(bot.nodeKey);
+    if (!n || !n.segs.length) { bot.nodeKey = [...nodes.keys()][0]; continue; }
+    // prefer heading towards stretches it does not own
+    const opts = n.segs.map(sid => {
+      const s = segs.get(sid); if (!s) return null;
+      return { key: s.a === bot.nodeKey ? s.b : s.a, w: s.owner === bot.team ? 1 : 4 };
+    }).filter(o => o && nodes.has(o.key));
+    if (!opts.length) continue;
+    const tot = opts.reduce((a,o) => a+o.w, 0);
+    let r = Math.random()*tot, pick = opts[0];
+    for (const o of opts) { r -= o.w; if (r <= 0) { pick = o; break; } }
+    bot.nodeKey = pick.key;
+    const nd = nodes.get(bot.nodeKey);
+    bot.marker.setLatLng([nd.lat, nd.lon]);
+
+    if (bot.bombs > 0 && Math.random() < .3 &&
+        ![...bombs.values()].some(b => b.nodeKey === bot.nodeKey)) {
+      bot.bombs--;
+      plantBomb(bot.nodeKey, bot.team, CFG.fuseMs * (0.7 + Math.random()*0.8),
+                BOT_POOL[Math.floor(Math.random()*BOT_POOL.length)]);
+    }
+    if (bot.bombs < 2 && Math.random() < .5) bot.bombs++;
+  }
+}
+
+/* ============================================================
+   AUDIO (synthesised, no files)
+   ============================================================ */
+function ac() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+function sfx(kind) {
+  if (muted) return;
+  try {
+    const c = ac(), t = c.currentTime;
+    if (kind === 'boom') {
+      const len = c.sampleRate * .5;
+      const buf = c.createBuffer(1, len, c.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = (Math.random()*2-1) * Math.pow(1 - i/len, 2.4);
+      const src = c.createBufferSource(); src.buffer = buf;
+      const f = c.createBiquadFilter(); f.type = 'lowpass';
+      f.frequency.setValueAtTime(1400, t); f.frequency.exponentialRampToValueAtTime(90, t+.45);
+      const g = c.createGain(); g.gain.setValueAtTime(.5, t); g.gain.exponentialRampToValueAtTime(.001, t+.5);
+      src.connect(f).connect(g).connect(c.destination); src.start(t);
+    } else {
+      const o = c.createOscillator(), g = c.createGain();
+      o.type = 'square';
+      const f0 = kind === 'defuse' ? 440 : 660;
+      o.frequency.setValueAtTime(f0, t);
+      o.frequency.exponentialRampToValueAtTime(kind === 'defuse' ? 880 : 330, t+.12);
+      g.gain.setValueAtTime(.12, t); g.gain.exponentialRampToValueAtTime(.001, t+.14);
+      o.connect(g).connect(c.destination); o.start(t); o.stop(t+.15);
+    }
+  } catch(e) {}
+}
+
+/* ============================================================
+   BOOT
+   ============================================================ */
+const setLoadMsg = m => $('load-msg').textContent = m;
+
+function getPosition() {
+  return new Promise(resolve => {
+    if (!navigator.geolocation) return resolve(null);
+    navigator.geolocation.getCurrentPosition(
+      p => resolve([p.coords.latitude, p.coords.longitude]),
+      () => resolve(null),
+      { enableHighAccuracy:true, timeout:7000, maximumAge:60000 });
+  });
+}
+
+async function loadArea(lat, lon, demo) {
+  $('load').classList.remove('done');
+  $('load-retry').style.display = 'none';
+  try {
+    let els;
+    if (demo) {
+      setLoadMsg('loading the demo city…');
+      els = (await (await fetch(DEMO.file)).json()).elements;
+      [lat, lon] = [DEMO.lat, DEMO.lon];
+    } else {
+      setLoadMsg('downloading streets…');
+      try { els = await fetchStreets(lat, lon); }
+      catch (e) {
+        log(`Street server busy (${e.message}) · loaded the demo city instead`, 'var(--hot)');
+        return loadArea(0, 0, true);
+      }
+    }
+    setLoadMsg('building the crossing graph…');
+    buildGraph(els);
+    drawGraph();
+    setMe(lat, lon, false);
+    map.setView([lat, lon], 17);
+    bombs.forEach(b => b.marker && fxLayer.removeLayer(b.marker));
+    bombs.clear();
+    spawnBots(CFG.botCount);
+    me.bombs = CFG.maxBombs; refreshStock();
+    $('load').classList.add('done');
+    log(`📍 Area loaded: <b>${nodes.size} crossings</b>, <b>${segs.size} stretches</b>`, 'var(--lime)');
+    log('Walk to a corner, photograph what is there, and that becomes your bomb.', 'var(--dim)');
+  } catch (e) {
+    setLoadMsg('Error: ' + e.message);
+    $('load-retry').style.display = '';
+  }
+}
+
+function renderArsenal() {
+  $('arsenal').innerHTML = Object.entries(BOMBS).map(([k, b]) =>
+    `<li><span class="ico">${b.ico}</span><div><b>${b.obj ? b.obj[0].toUpperCase()+b.obj.slice(1) : 'Anything else'} → ${b.name}</b>` +
+    `<span>${b.desc}</span></div></li>`).join('');
+}
+
+async function init() {
+  renderArsenal();
+  map = L.map('map', { preferCanvas:true, zoomControl:false, attributionControl:true })
+        .setView([40.4168,-3.7038], 17);
+  L.control.zoom({ position:'bottomright' }).addTo(map);
+  // Standard OSM tiles, darkened in CSS (.dark-tiles) so no tile API key is needed.
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom:19, className:'dark-tiles',
+    attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  }).addTo(map);
+  graphLayer = L.layerGroup().addTo(map);
+  fxLayer = L.layerGroup().addTo(map);
+
+  map.on('click', e => walkTo(e.latlng.lat, e.latlng.lng));
+
+  setLoadMsg('finding your position…');
+  const pos = await getPosition();
+  if (!pos) log('No GPS · playing the demo city. Pan the map and use «Load streets around map center» to play elsewhere.', 'var(--hot)');
+  await loadArea(pos?.[0], pos?.[1], !pos);
+  startVision();
+
+  setInterval(tickBombs, 250);
+  setInterval(tickDecay, 1000);
+  setInterval(() => {
+    if (me.bombs < CFG.maxBombs && Date.now() - me.lastRegen > CFG.regenMs) {
+      me.bombs++; me.lastRegen = Date.now(); refreshStock();
+    }
+  }, 500);
+  setInterval(() => { if (bots.length) tickBots(); }, CFG.botTick);
+  setInterval(updateDefuseButton, 400);
+}
+
+/* ---------- UI ---------- */
+$('plant').onclick = () => { ac(); tryPlant(); };
+$('load-retry').onclick = () => loadArea(me.lat, me.lon, !me.lat);
+$('reload').onclick = () => {
+  const c = map.getCenter(); loadArea(c.lat, c.lng);
+};
+$('mute').onclick = e => {
+  muted = !muted; e.target.textContent = muted ? '🔇' : '🔊';
+};
+$('side-head').onclick = () => {
+  const s = $('side');
+  s.classList.toggle('collapsed');
+  $('side-caret').textContent = s.classList.contains('collapsed') ? '▸' : '▾';
+};
+
+const df = $('defuse');
+df.addEventListener('pointerdown', e => { e.preventDefault(); ac(); startDefuse(); });
+['pointerup','pointerleave','pointercancel'].forEach(ev => df.addEventListener(ev, cancelDefuse));
+
+const bind = (id, key, apply) => {
+  const el = $(id);
+  el.oninput = () => {
+    const v = +el.value;
+    $('v-'+key).textContent = v;
+    apply(v);
+  };
+};
+bind('r-fuse','fuse', v => CFG.fuseMs = v*1000);
+bind('r-decay','decay', v => CFG.decayMs = v*1000);
+bind('r-bots','bots', v => { CFG.botCount = v; spawnBots(v); });
+
+document.querySelectorAll('#movemode button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('#movemode button').forEach(x => x.classList.remove('on'));
+  b.classList.add('on');
+  moveMode = b.dataset.mode;
+  $('cam-file-lbl').style.display = moveMode === 'dev' ? '' : 'none';
+  if (moveMode === 'gps') {
+    if (!navigator.geolocation) { log('This browser has no geolocation', 'var(--hot)'); return; }
+    geoWatch = navigator.geolocation.watchPosition(
+      p => setMe(p.coords.latitude, p.coords.longitude, true),
+      err => log('GPS: ' + err.message + ' (served over https?)', 'var(--hot)'),
+      { enableHighAccuracy:true, maximumAge:2000, timeout:10000 });
+    log('📡 Following your real GPS · bombs need a live camera shot', 'var(--blue)');
+  } else if (geoWatch !== null) {
+    navigator.geolocation.clearWatch(geoWatch); geoWatch = null;
+    log('🖱️ Demo mode: click or WASD to move', 'var(--blue)');
+  }
+});
+
+window.addEventListener('keydown', e => {
+  if ($('cam').classList.contains('on')) return;
+  const k = e.key.toLowerCase();
+  const s = CFG.stepMeters * (e.shiftKey ? 3 : 1);
+  if (k === 'w' || k === 'arrowup')    { nudge(s, 0);  e.preventDefault(); }
+  if (k === 's' || k === 'arrowdown')  { nudge(-s, 0); e.preventDefault(); }
+  if (k === 'a' || k === 'arrowleft')  { nudge(0, -s); e.preventDefault(); }
+  if (k === 'd' || k === 'arrowright') { nudge(0, s);  e.preventDefault(); }
+  if (k === ' ') { ac(); tryPlant(); e.preventDefault(); }
+});
+
+// Test hook for automated runs only (open with #debug).
+if (location.hash === '#debug') window.SB = {
+  nodes: () => nodes, segs: () => segs, bombs: () => bombs, me: () => me, setMe,
+  detonateAll: () => [...bombs.values()].forEach(b => detonate(b, 0)),
+};
+
+refreshStock();
+init();
+</script>
+</body>
+</html>
