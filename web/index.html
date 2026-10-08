@@ -1554,6 +1554,7 @@ if (location.hash === '#debug') window.SB = {
   blocks: () => blocks, claim: (sid, team) => { const s = segs.get(sid); s.owner = team; s.ownedAt = Date.now(); paintSeg(s); refreshScore(); },
   save: () => save, point: (lat, lon) => map.latLngToContainerPoint([lat, lon]),
   view: (lat, lon, z) => map.setView([lat, lon], z ?? map.getZoom(), { animate:true }),
+  clearBombs: () => { bombs.forEach(b => b.marker && fxLayer.removeLayer(b.marker)); bombs.clear(); },
 };
 
 refreshStock();
