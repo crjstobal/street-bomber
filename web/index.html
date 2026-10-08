@@ -1157,6 +1157,9 @@ async function init() {
   if (!pos) log('No GPS · playing the demo city. Pan the map and use «Load streets around map center» to play elsewhere.', 'var(--hot)');
   await loadArea(pos?.[0], pos?.[1], !pos);
   startVision();
+  // On a phone with GPS, play for real: the settings panel is hidden on small screens.
+  if (pos && matchMedia('(pointer:coarse)').matches)
+    document.querySelector('#movemode button[data-mode="gps"]').click();
 
   setInterval(tickBombs, 250);
   setInterval(tickDecay, 1000);
