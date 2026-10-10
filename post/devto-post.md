@@ -43,7 +43,7 @@ It is for anyone who already walks the dog, goes for a run or does the school ru
 - At a desk: without GPS it opens a demo city (central Madrid). Click the map or use WASD to walk, and feed the camera a photo file. Demo mode recharges bombs every 15 seconds.
 - The first visit downloads the vision model once (99 MB, then cached), so use Wi-Fi.
 
-{% vimeo VIMEO_VIDEO_ID %}
+{% vimeo https://vimeo.com/1234693434 %}
 
 A note on the video: **real streets are private data**, so I recorded it in demo mode, in central Madrid, with a simulated camera fed with Wikimedia Commons photos. The model is real: every frame you see classified was classified by SigLIP in the browser.
 
@@ -86,7 +86,14 @@ The map data is open too: the whole game exists because people mapped their stre
 
 ## I took it outside
 
-<!-- TODO Javi: 3 to 5 lines, no street names. What did you photograph first? What surprised you (a bin that became a fountain? the AI refusing your selfie)? Did you walk further than you planned to close a block? -->
+I tested the first version on my own phone, around my own streets. It was fun, and it was also clearly unfinished. That walk changed the game more than any planning did:
+
+- **The first load was slow**, because the game asks a public OpenStreetMap server for every street around you. Now the street map is cached per area, and the second visit is instant.
+- **Closing the app lost everything.** Now your territory, your bombs and your album are saved on the phone.
+- **Painting streets had no goal.** Closing whole blocks came straight out of that walk, and it is now the heart of the game.
+- **It should pull you back outside, not keep you on the screen.** So: one bomb a day, and streets that stay yours until someone takes them. The game wants you to come back tomorrow, on foot.
+
+I'm not showing footage of that walk. Those are my streets, and that is exactly the kind of data this game is built to keep private.
 
 ## Credits
 
