@@ -43,7 +43,7 @@ It is for anyone who already walks the dog, goes for a run or does the school ru
 - At a desk: without GPS it opens a demo city (central Madrid). Click the map or use WASD to walk, and feed the camera a photo file. Demo mode recharges bombs every 15 seconds.
 - The first visit downloads the vision model once (99 MB, then cached), so use Wi-Fi.
 
-{% youtube YOUTUBE_VIDEO_ID %}
+{% vimeo VIMEO_VIDEO_ID %}
 
 A note on the video: **real streets are private data**, so I recorded it in demo mode, in central Madrid, with a simulated camera fed with Wikimedia Commons photos. The model is real: every frame you see classified was classified by SigLIP in the browser.
 
