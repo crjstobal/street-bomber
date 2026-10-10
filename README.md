@@ -31,8 +31,7 @@ Built for the DEV Hacktoberfest 2026 Open-Source AI Challenge, Week 1: *Touch Gr
 - **One bomb a day.** In real GPS play you get a new bomb every 24 hours (stock of up to 3,
   starter pack of 3). Closing a block or recycling a bin earns one back. The point is to
   make you go outside again tomorrow, not to keep you on the screen today.
-- Progress is saved on the phone. Owned streets fade back to neutral after a week
-  unless you come back. Demo mode (desk play) recharges every 15 s so anyone can try it. Two simple rival bots (random walkers, not AI) keep the map moving.
+- Progress is saved on the phone. Streets stay yours until a rival bombs them. Demo mode (desk play) recharges every 15 s so anyone can try it. Two simple rival bots (random walkers, not AI) keep the map moving.
 
 ## The open AI part
 

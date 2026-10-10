@@ -217,8 +217,6 @@
     <div class="hint" style="margin-top:4px"></div>
     <div class="fld"><label>Fuse <b><span id="v-fuse">20</span>s</b></label>
       <input type="range" id="r-fuse" min="5" max="120" step="5" value="20"></div>
-    <div class="fld"><label>Streets fade after <b><span id="v-decay">168</span>h</b></label>
-      <input type="range" id="r-decay" min="1" max="336" step="1" value="168"></div>
     <div class="fld"><label>Bot rivals <b><span id="v-bots">2</span></b></label>
       <input type="range" id="r-bots" min="0" max="4" step="1" value="2"></div>
     <div class="fld"><label>Movement</label>
@@ -310,7 +308,7 @@ import { loadVision, visionReady, classify } from './vision.js';
 const CFG = {
   radius: 500,        // metres of street network loaded around the start point
   fuseMs: 20000,
-  decayMs: 7 * 24 * 3600e3,  // owned streets fade back to neutral after a week
+  decayMs: Infinity,     // streets stay yours until a rival takes them
   maxTurn: 62,        // degrees: sharpest turn the blast can follow
   plantDist: 50,      // metres to a crossing to be able to plant
   defuseDist: 45,
@@ -689,7 +687,7 @@ function refreshBlocks() {
       sfx('capture');
       pulseBlock(b);
     } else if (was === 'red') {
-      log(`💔 You lost a block to <b>${owner ? TEAMS[owner].name : 'decay'}</b>`, 'var(--dim)');
+      log(`💔 You lost a block to <b>${owner ? TEAMS[owner].name : 'a flood'}</b>`, 'var(--dim)');
     }
   }
 }
@@ -1513,7 +1511,6 @@ const bind = (id, key, apply) => {
   };
 };
 bind('r-fuse','fuse', v => CFG.fuseMs = v*1000);
-bind('r-decay','decay', v => CFG.decayMs = v*3600e3);
 bind('r-bots','bots', v => { CFG.botCount = v; spawnBots(v); });
 
 document.querySelectorAll('#movemode button').forEach(b => b.onclick = () => {
